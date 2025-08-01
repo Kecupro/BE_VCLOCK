@@ -1,11 +1,28 @@
-const mongoose = require("mongoose");
-mongoose.connect("mongodb://127.0.0.1:27017/DATN_V2");
-const conn = mongoose.createConnection("mongodb://127.0.0.1:27017/DATN_V2");
-
 require('dotenv').config();
+
+const mongoose = require("mongoose");
+
+// Sử dụng MongoDB Atlas thay vì local
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/DATN_V2";
+
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => {
+  console.log('✅ Kết nối MongoDB Atlas thành công');
+})
+.catch((error) => {
+  console.error('❌ Lỗi kết nối MongoDB:', error);
+});
+
+const conn = mongoose.createConnection(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
 const exp = require('express');
 const app = exp();
-const port = 3000;
+const port = process.env.PORT || 3000;
 const cors = require('cors');
 const slugify = require('slugify');
 const multer = require('multer');
@@ -22,7 +39,7 @@ require('./auth/google'); // import cấu hình passport google
 require('./auth/facebook');
 
 app.use(cors({
-  origin: "http://localhost:3005",
+  origin: process.env.CORS_ORIGIN || "http://localhost:3005",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
@@ -5849,4 +5866,8 @@ app.get("/check-role", (req, res) => {
 // ! <== End edit account admin ==>
 
 
-server.listen(port, () => console.log(`Ung dung dang chay voi port ${port}`));
+server.listen(port, () => {
+  console.log(`🚀 Server đang chạy trên port ${port}`);
+  console.log(`📡 MongoDB URI: ${MONGODB_URI}`);
+  console.log(`🌐 CORS Origin: ${process.env.CORS_ORIGIN || 'http://localhost:3005'}`);
+});
