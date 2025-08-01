@@ -39,17 +39,55 @@ require('./auth/google'); // import cấu hình passport google
 require('./auth/facebook');
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || "http://localhost:3005",
+  origin: function (origin, callback) {
+    // Cho phép requests không có origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Loại bỏ dấu / ở cuối nếu có
+    const cleanOrigin = origin.replace(/\/$/, '');
+    
+    const allowedOrigins = [
+      'https://fe-vclock.vercel.app',
+      'https://www.fe-vclock.vercel.app',
+      'http://localhost:3005',
+      'http://localhost:3000'
+    ];
+    
+    if (allowedOrigins.includes(cleanOrigin)) {
+      callback(null, cleanOrigin); // Trả về origin đã được clean
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
 
 app.options('*', cors());
+
+// Middleware để debug CORS
+app.use((req, res, next) => {
+  console.log('Request origin:', req.headers.origin);
+  console.log('Request method:', req.method);
+  console.log('Request path:', req.path);
+  next();
+});
+
 app.use( exp.json() );
 
 app.all('/checkout-success', (req, res) => {
   res.sendStatus(200);
+});
+
+// Test endpoint để kiểm tra CORS
+app.get('/test-cors', (req, res) => {
+  res.json({
+    message: 'CORS test successful',
+    origin: req.headers.origin,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ! Lưu ảnh phương thức thanh toán
