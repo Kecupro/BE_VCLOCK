@@ -1052,8 +1052,13 @@ app.get('/auth/google/callback',
       process.env.JWT_SECRET || 'your_jwt_secret_key',
       { expiresIn: '1d' }
     );
+    
+    // Sử dụng biến môi trường hoặc domain chính
+    const frontendDomain = process.env.FRONTEND_DOMAIN || 'https://fe-vclock.vercel.app';
+    const redirectUrl = `${frontendDomain}/auth/google/success`;
+    
     // Redirect về frontend kèm token
-    res.redirect(`https://fe-vclock.vercel.app/auth/google/success?token=${token}`);
+    res.redirect(`${redirectUrl}?token=${token}`);
   }
 );
 // ! end login Google
@@ -1073,7 +1078,8 @@ app.get('/auth/facebook/callback',
       { expiresIn: '1d' }
     );
     // Redirect về frontend kèm token
-    res.redirect(`https://fe-vclock.vercel.app/auth/google/success?token=${token}`);
+    const frontendDomain = process.env.FRONTEND_DOMAIN || 'https://fe-vclock.vercel.app';
+    res.redirect(`${frontendDomain}/auth/google/success?token=${token}`);
   }
 );
 // Facebook Data Deletion Callback
