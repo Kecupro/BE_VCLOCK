@@ -139,16 +139,15 @@ module.exports = uploadPMs;
 // ! Lưu ảnh Avatar
 const uploadAvt = path.join(
   __dirname,
-  "uploads",
-  "avatars"
+  "..",
+  "DATN",
+  "public",
+  "images",
+  "avatar"
 );
 
 const storageAvt = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Đảm bảo thư mục tồn tại
-    if (!fs.existsSync(uploadAvt)) {
-      fs.mkdirSync(uploadAvt, { recursive: true });
-    }
     cb(null, uploadAvt);
   },
   filename: (req, file, cb) => {
@@ -655,16 +654,17 @@ app.delete('/api/conversations/:conversationId', async (req, res) => {
 
 
 
+const avatarUploadPath = path.join(__dirname, 'uploads', 'avatars');
+if (!fs.existsSync(avatarUploadPath)) {
+  fs.mkdirSync(avatarUploadPath, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, uploadAvt); // Sử dụng thư mục avatar đã định nghĩa
+    cb(null, avatarUploadPath);
   },
   filename: function (req, file, cb) {
-    const timestamp = Date.now();
-    const randomNum = Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, ext).replace(/\s+/g, "-");
-    cb(null, `${baseName}-${timestamp}-${randomNum}${ext}`);
+    cb(null, req.user.userId + '-' + Date.now() + path.extname(file.originalname));
   }
 });
 
@@ -964,7 +964,7 @@ app.post('/reset-password',
   // ! end reset password
 
 // ! update profile
-app.put('/user/profile/update', verifyToken, uploadAvatar.single('avatar'), async (req, res) => {
+app.put('/user/profile/update', verifyToken, upload.single('avatar'), async (req, res) => {
   try {
     const { fullname, email, phone_number, address } = req.body;
     const userId = req.user.userId;
@@ -986,9 +986,8 @@ app.put('/user/profile/update', verifyToken, uploadAvatar.single('avatar'), asyn
     if (address) userToUpdate.address = address;
 
     if (req.file) {
-      // Xóa avatar cũ nếu có và không phải là URL từ Google/Facebook
       if (userToUpdate.avatar && !userToUpdate.avatar.startsWith('http')) {
-        const oldAvatarPath = path.join(uploadAvt, userToUpdate.avatar);
+        const oldAvatarPath = path.join(avatarUploadPath, userToUpdate.avatar);
         if (fs.existsSync(oldAvatarPath)) {
           try {
             fs.unlinkSync(oldAvatarPath);
@@ -998,7 +997,6 @@ app.put('/user/profile/update', verifyToken, uploadAvatar.single('avatar'), asyn
         }
       }
       userToUpdate.avatar = req.file.filename;
-      console.log("New avatar uploaded:", req.file.filename);
     }
 
     const updatedUser = await userToUpdate.save();
@@ -1014,7 +1012,7 @@ app.put('/user/profile/update', verifyToken, uploadAvatar.single('avatar'), asyn
     if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
         return res.status(400).json({ message: 'Email này đã được sử dụng.' });
     }
-    if (error.message.includes('Chỉ cho phép file ảnh')) {
+    if (error.message.includes('Chỉ chấp nhận file ảnh')) {
         return res.status(400).json({ message: error.message });
     }
     res.status(500).json({ message: 'Lỗi server khi cập nhật thông tin', error: error.message });
