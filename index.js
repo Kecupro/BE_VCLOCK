@@ -1049,7 +1049,7 @@ app.get('/auth/google/callback',
       { expiresIn: '1d' }
     );
     // Redirect về frontend kèm token
-    res.redirect(`http://localhost:3005/auth/google/success?token=${token}`);
+    res.redirect(`https://fe-vclock.vercel.app/auth/google/success?token=${token}`);
   }
 );
 // ! end login Google
@@ -1069,7 +1069,7 @@ app.get('/auth/facebook/callback',
       { expiresIn: '1d' }
     );
     // Redirect về frontend kèm token
-    res.redirect(`http://localhost:3005/auth/google/success?token=${token}`);
+    res.redirect(`https://fe-vclock.vercel.app/auth/google/success?token=${token}`);
   }
 );
 // Facebook Data Deletion Callback
