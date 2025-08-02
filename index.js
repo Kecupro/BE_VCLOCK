@@ -46,6 +46,7 @@ app.use(cors({
     // Loại bỏ dấu / ở cuối nếu có
     const cleanOrigin = origin.replace(/\/$/, '');
     
+    // Danh sách domain được phép
     const allowedOrigins = [
       'https://fe-vclock.vercel.app',
       'https://www.fe-vclock.vercel.app',
@@ -53,7 +54,10 @@ app.use(cors({
       'http://localhost:3000'
     ];
     
-    if (allowedOrigins.includes(cleanOrigin)) {
+    // Pattern matching cho Vercel preview deployments
+    const vercelPattern = /^https:\/\/fe-vclock.*\.vercel\.app$/;
+    
+    if (allowedOrigins.includes(cleanOrigin) || vercelPattern.test(cleanOrigin)) {
       callback(null, cleanOrigin); // Trả về origin đã được clean
     } else {
       console.log('CORS blocked origin:', origin);
@@ -1101,7 +1105,7 @@ app.post('/auth/facebook/delete-data', async (req, res) => {
     // 4. Phản hồi cho Facebook
     const confirmationCode = `delete_confirm_${userIdToDelete}`;
     res.json({
-      url: `http://localhost:3000/auth/facebook/deletion-status/${confirmationCode}`,
+      url: `https://bevclock-production.up.railway.app/auth/facebook/deletion-status/${confirmationCode}`,
       confirmation_code: confirmationCode,
     });
 
