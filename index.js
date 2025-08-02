@@ -50,8 +50,8 @@ app.use(cors({
     const allowedOrigins = [
       'https://fe-vclock.vercel.app',
       'https://www.fe-vclock.vercel.app',
-      'http://localhost:3005',
-      'http://localhost:3000'
+      'https://vclock.fun',
+      'http://localhost:3005'
     ];
     
     // Pattern matching cho Vercel preview deployments
