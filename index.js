@@ -2551,13 +2551,11 @@ app.post('/api/news/:id/increment-view', async (req, res) => {
   try {
     const newsId = new ObjectId(req.params.id);
     
-    // Kiểm tra xem tin tức có tồn tại không
     const news = await NewsModel.findById(newsId);
     if (!news) {
       return res.status(404).json({ error: 'Không tìm thấy tin tức' });
     }
 
-    // Tăng lượt xem
     const result = await NewsModel.findByIdAndUpdate(
       newsId,
       { $inc: { views: 1 } },
