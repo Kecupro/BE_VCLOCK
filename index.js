@@ -2541,37 +2541,38 @@ app.get('/api/news/:id', async (req, res) => {
       return res.status(404).json({ error: 'Không tìm thấy tin tức' });
     }
 
-    // Increment views
-    await NewsModel.updateOne({ _id: newsId }, { $inc: { views: 1 } });
-
     res.json(news[0]);
   } catch (err) {
     res.status(500).json({ error: 'Lỗi lấy tin tức', details: err.message });
   }
 });
 
-// app.post('/api/news/:id/increment-view', async (req, res) => {
-//   try {
-//     const newsId = new ObjectId(req.params.id);
-  
-//     const result = await NewsModel.findByIdAndUpdate(
-//       newsId,
-//       { $inc: { views: 1 } },
-//       { new: true }
-//     );
+app.post('/api/news/:id/increment-view', async (req, res) => {
+  try {
+    const newsId = new ObjectId(req.params.id);
+    
+    // Kiểm tra xem tin tức có tồn tại không
+    const news = await NewsModel.findById(newsId);
+    if (!news) {
+      return res.status(404).json({ error: 'Không tìm thấy tin tức' });
+    }
 
-//     if (!result) {
-//       return res.status(404).json({ error: 'Không tìm thấy tin tức' });
-//     }
+    // Tăng lượt xem
+    const result = await NewsModel.findByIdAndUpdate(
+      newsId,
+      { $inc: { views: 1 } },
+      { new: true }
+    );
 
-//     res.json({ 
-//       message: 'Đã tăng lượt xem',
-//       views: result.views 
-//     });
-//   } catch (err) {
-//     res.status(500).json({ error: 'Lỗi tăng lượt xem', details: err.message });
-//   }
-// });
+    res.json({ 
+      success: true,
+      message: 'Đã tăng lượt xem',
+      views: result.views 
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Lỗi tăng lượt xem', details: err.message });
+  }
+});
 
 app.get('/api/news/category/:categoryId', async (req, res) => {
   try {
@@ -3887,6 +3888,21 @@ app.get("/api/admin/user", async (req, res) => {
           as: "addresses",
         },
       },
+      {
+        $project: {
+          _id: 1,
+          username: 1,
+          email: 1,
+          fullName: 1,
+          avatar: 1,
+          role: 1,
+          account_status: 1,
+          created_at: 1,
+          updated_at: 1,
+          addresses: 1,
+          roleNumeric: 1
+        }
+      }
     ]);
 
     const roleAggregation = await UserModel.aggregate([
