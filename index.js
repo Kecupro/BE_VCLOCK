@@ -1423,7 +1423,7 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
     });
 
     if (voucher_id && user_id) {
-      await VoucherUserModel.deleteOne({ voucher_id, user_id });
+      await VoucherUserModel.updateOne({ voucher_id, user_id }, { $set: { used: true } });
     }
     const orderItems = cart.map((item) => ({
       order_id: newOrder._id,
@@ -3122,7 +3122,11 @@ app.post("/api/voucher-user/save", verifyToken, async (req, res) => {
     // Kiểm tra user đã lưu voucher này chưa (bất kể used true/false)
     const existingVoucher = await VoucherUserModel.findOne({ user_id, voucher_id });
     if (existingVoucher) {
-      return res.status(400).json({ message: "Bạn đã lưu voucher này rồi!" });
+      if (existingVoucher.used) {
+        return res.status(400).json({ message: "Voucher này đã được sử dụng!" });
+      } else {
+        return res.status(400).json({ message: "Bạn đã lưu voucher này rồi!" });
+      }
     }
 
     // Lưu voucher cho user (used: false)
@@ -3134,6 +3138,34 @@ app.post("/api/voucher-user/save", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Đã xảy ra lỗi khi lưu voucher" });
   }
 });
+// API debug voucher user (chỉ dành cho admin)
+app.get("/api/voucher-user/debug/:voucher_id", verifyToken, async (req, res) => {
+  try {
+    const { voucher_id } = req.params;
+    const user_id = req.user.userId;
+
+    // Kiểm tra quyền admin
+    const user = await UserModel.findById(user_id);
+    if (!user || user.role < 1) {
+      return res.status(403).json({ message: "Không có quyền truy cập" });
+    }
+
+    const voucherUser = await VoucherUserModel.findOne({ voucher_id, user_id });
+    
+    res.json({
+      voucher_id,
+      user_id,
+      exists: !!voucherUser,
+      used: voucherUser?.used || false,
+      created_at: voucherUser?.created_at,
+      updated_at: voucherUser?.updated_at
+    });
+  } catch (error) {
+    console.error("Lỗi debug voucher user:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi khi debug voucher user" });
+  }
+});
+
 // ! end voucher
 
 // ! <== Admin ==>
