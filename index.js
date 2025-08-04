@@ -1263,7 +1263,8 @@ const TempOrderSchema = require("./model/schemaTempOrder");
 const TempOrderModel = conn.model("TempOrders", TempOrderSchema);
 
 
-const YOUR_DOMAIN = "http://localhost:3005";
+const YOUR_DOMAIN = "https://fe-vclock.vercel.app";
+const WEBHOOK_URL = process.env.WEBHOOK_URL || "https://bevclock-production.up.railway.app/receive-hook";
 
 app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
   try {
@@ -1287,6 +1288,7 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
       orderCode,
       returnUrl: `${YOUR_DOMAIN}/checkout-success`,
       cancelUrl: `${YOUR_DOMAIN}/checkout-cancel`,
+      webhookUrl: WEBHOOK_URL,
     };
 
     const paymentLink = await payos.createPaymentLink(order);
@@ -1298,7 +1300,7 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
   }
 });
 
-//  https://5b22b1ff34f8.ngrok-free.app/receive-hook
+//  https://bevclock-production.up.railway.app/receive-hook
 app.post("/receive-hook", async (req, res) => {
   const data = req.body?.data;
   const status = req.body?.code; // mã "00" nghĩa là thành công
@@ -1346,8 +1348,8 @@ app.post("/receive-hook", async (req, res) => {
       updated_at: new Date()
     });
 
-    if (voucher_id && user_id) {
-       await VoucherUserModel.updateOne({ voucher_id, user_id }, { $set: { used: true } });
+    if (orderData.voucher_id && orderData.user_id) {
+       await VoucherUserModel.updateOne({ voucher_id: orderData.voucher_id, user_id: orderData.user_id }, { $set: { used: true } });
     }
 
     const items = orderData.cart.map(i => ({
