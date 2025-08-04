@@ -1452,6 +1452,24 @@ app.post('/checkout/addresses', verifyOptionalToken, async (req, res) => {
       return res.status(400).json({ message: 'Vui lòng điền đầy đủ thông tin' });
     }
 
+    // Kiểm tra địa chỉ đã tồn tại chưa (chỉ cho user đã đăng nhập)
+    if (userId) {
+      const existingAddress = await AddressModel.findOne({
+        user_id: userId,
+        receiver_name: receiver_name,
+        phone: phone,
+        address: address
+      });
+
+      if (existingAddress) {
+        return res.status(200).json({ 
+          success: true, 
+          address: existingAddress,
+          message: 'Địa chỉ đã tồn tại'
+        });
+      }
+    }
+
     const newAddress = new AddressModel({
       user_id: userId,  // Cho phép null
       receiver_name,
@@ -2276,6 +2294,20 @@ app.post('/user/addresses', verifyToken, async (req, res) => {
 
     if (!receiver_name || !phone || !address) {
       return res.status(400).json({ message: 'Vui lòng điền đầy đủ thông tin' });
+    }
+
+    // Kiểm tra địa chỉ đã tồn tại chưa
+    const existingAddress = await AddressModel.findOne({
+      user_id: userId,
+      receiver_name: receiver_name,
+      phone: phone,
+      address: address
+    });
+
+    if (existingAddress) {
+      return res.status(400).json({ 
+        message: 'Địa chỉ này đã tồn tại trong danh sách của bạn' 
+      });
     }
 
     const newAddress = new AddressModel({
