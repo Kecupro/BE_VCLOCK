@@ -35,7 +35,7 @@ const MessageSchema = new mongoose.Schema({
     default: 'text',
   },
   seenBy: {
-    type: [String],  // Danh sách userId đã xem
+    type: [String],  
     default: [],
   },
   createdAt: {

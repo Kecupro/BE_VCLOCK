@@ -11,15 +11,15 @@ passport.use(new GoogleStrategy({
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      // Kiểm tra user theo googleId trước
+
       let user = await User.findOne({ googleId: profile.id });
       
       if (!user) {
-        // Nếu không tìm thấy theo googleId, kiểm tra theo email
+
         user = await User.findOne({ email: profile.emails[0].value });
         
         if (user) {
-          // Nếu user đã tồn tại với email này, cập nhật thêm googleId
+
           user.googleId = profile.id;
           if (!user.fullname) user.fullName = profile.displayName;
           if (!user.avatar && profile.photos && profile.photos.length > 0) {
@@ -27,7 +27,7 @@ passport.use(new GoogleStrategy({
           }
           await user.save();
         } else {
-          // Tạo user mới nếu chưa tồn tại
+
           const randomPassword = Math.random().toString(36).slice(-10) + Date.now().toString(36);
           const password_hash = await bcrypt.hash(randomPassword, 10);
           
@@ -46,7 +46,7 @@ passport.use(new GoogleStrategy({
       
       return done(null, user);
     } catch (err) {
-      console.error('Google OAuth error:', err);
+      console.error('Lỗi Google OAuth:', err);
       return done(err, null);
     }
   }

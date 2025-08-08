@@ -585,7 +585,7 @@ const users = [
     email: "user01@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user01.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -596,7 +596,7 @@ const users = [
     email: "user02@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user02.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -607,7 +607,7 @@ const users = [
     email: "user03@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user03.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -618,7 +618,7 @@ const users = [
     email: "user04@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user04.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -629,7 +629,7 @@ const users = [
     email: "user05@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user05.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -640,7 +640,7 @@ const users = [
     email: "user06@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user06.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -651,7 +651,7 @@ const users = [
     email: "user07@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user07.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -662,7 +662,7 @@ const users = [
     email: "user08@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user08.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -673,7 +673,7 @@ const users = [
     email: "user09@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user09.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -684,7 +684,7 @@ const users = [
     email: "user10@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user10.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -695,7 +695,7 @@ const users = [
     email: "user11@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user11.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -706,7 +706,7 @@ const users = [
     email: "user12@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user12.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -717,7 +717,7 @@ const users = [
     email: "user13@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user13.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -728,7 +728,7 @@ const users = [
     email: "user14@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user14.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -739,7 +739,7 @@ const users = [
     email: "user15@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user15.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -750,7 +750,7 @@ const users = [
     email: "user16@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user16.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -761,7 +761,7 @@ const users = [
     email: "user17@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user17.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -772,7 +772,7 @@ const users = [
     email: "user18@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user18.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -783,7 +783,7 @@ const users = [
     email: "user19@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user19.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -794,7 +794,7 @@ const users = [
     email: "user20@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user20.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -805,7 +805,7 @@ const users = [
     email: "user21@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user21.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -816,7 +816,7 @@ const users = [
     email: "user22@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user22.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -827,7 +827,7 @@ const users = [
     email: "user23@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user23.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -838,7 +838,7 @@ const users = [
     email: "user24@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user24.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -849,7 +849,7 @@ const users = [
     email: "user25@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user25.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -860,7 +860,7 @@ const users = [
     email: "user26@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user26.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -871,7 +871,7 @@ const users = [
     email: "user27@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user27.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -882,7 +882,7 @@ const users = [
     email: "user28@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user28.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -893,7 +893,7 @@ const users = [
     email: "user29@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user29.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -904,7 +904,7 @@ const users = [
     email: "user30@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user30.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -915,7 +915,7 @@ const users = [
     email: "user31@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user31.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -926,7 +926,7 @@ const users = [
     email: "user32@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user32.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -937,7 +937,7 @@ const users = [
     email: "user33@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user33.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -948,7 +948,7 @@ const users = [
     email: "user34@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user34.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -959,7 +959,7 @@ const users = [
     email: "user35@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user35.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -970,7 +970,7 @@ const users = [
     email: "user36@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user36.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -981,7 +981,7 @@ const users = [
     email: "user37@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user37.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -992,7 +992,7 @@ const users = [
     email: "user38@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user38.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1003,7 +1003,7 @@ const users = [
     email: "user39@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user39.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1014,7 +1014,7 @@ const users = [
     email: "user40@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user40.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1025,7 +1025,7 @@ const users = [
     email: "user41@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user41.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1036,7 +1036,7 @@ const users = [
     email: "user42@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user42.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1047,7 +1047,7 @@ const users = [
     email: "user43@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user43.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1058,7 +1058,7 @@ const users = [
     email: "user44@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user44.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1069,7 +1069,7 @@ const users = [
     email: "user45@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user45.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1080,7 +1080,7 @@ const users = [
     email: "user46@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user46.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1091,7 +1091,7 @@ const users = [
     email: "user47@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user47.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1102,7 +1102,7 @@ const users = [
     email: "user48@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user48.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1113,7 +1113,7 @@ const users = [
     email: "user49@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user49.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -1124,7 +1124,7 @@ const users = [
     email: "user50@example.com",
     account_status: 0,
     role: 0,
-    avatar: "https://example.com/avatars/user50.jpg",
+    avatar: "https:
     created_at: "2025-05-28T11:35:36.000Z",
     updated_at: "2025-05-28T11:35:36.000Z",
   },
@@ -4125,7 +4125,7 @@ const payment_methods = [
     code: "BANK_TRANSFER",
     description: "Chuyển khoản trực tiếp qua ngân hàng",
     is_active: true,
-    icon_url: "https://placehold.co/48x48/F4E07B/black?text=Bank",
+    icon_url: "https:
     created_at: "2025-06-10T16:30:00.000Z",
     updated_at: "2025-06-10T16:30:00.000Z",
   },
@@ -4135,7 +4135,7 @@ const payment_methods = [
     code: "COD",
     description: "Thanh toán tiền mặt khi nhận hàng",
     is_active: true,
-    icon_url: "https://placehold.co/48x48/87CEEB/black?text=COD",
+    icon_url: "https:
     created_at: "2025-06-10T16:30:00.000Z",
     updated_at: "2025-06-10T16:30:00.000Z",
   },
@@ -4145,7 +4145,7 @@ const payment_methods = [
     code: "CREDIT_DEBIT_CARD",
     description: "Thanh toán trực tuyến bằng thẻ Visa, Mastercard, JCB",
     is_active: true,
-    icon_url: "https://placehold.co/48x48/A9F5A9/black?text=Card",
+    icon_url: "https:
     created_at: "2025-06-10T16:30:00.000Z",
     updated_at: "2025-06-10T16:30:00.000Z",
   },
@@ -4155,7 +4155,7 @@ const payment_methods = [
     code: "MOMO_WALLET",
     description: "Thanh toán qua ví điện tử MoMo",
     is_active: true,
-    icon_url: "https://placehold.co/48x48/FFB6C1/black?text=MoMo",
+    icon_url: "https:
     created_at: "2025-06-10T16:30:00.000Z",
     updated_at: "2025-06-10T16:30:00.000Z",
   },
@@ -4165,7 +4165,7 @@ const payment_methods = [
     code: "ZALOPAY_WALLET",
     description: "Thanh toán qua ví điện tử ZaloPay",
     is_active: true,
-    icon_url: "https://placehold.co/48x48/ADD8E6/black?text=ZaloPay",
+    icon_url: "https:
     created_at: "2025-06-10T16:30:00.000Z",
     updated_at: "2025-06-10T16:30:00.000Z",
   },
