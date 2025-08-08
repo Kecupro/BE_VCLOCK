@@ -47,12 +47,9 @@ app.use(cors({
     const cleanOrigin = origin.replace(/\/$/, '');
     
     // Danh sách domain được phép
-    const allowedOrigins = [
-      'https://fe-vclock.vercel.app',
-      'https://www.fe-vclock.vercel.app',
-      'https://vclock.fun',
-      'http://localhost:3005'
-    ];
+    const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+  : [];
     
     // Pattern matching cho Vercel preview deployments
     const vercelPattern = /^https:\/\/fe-vclock.*\.vercel\.app$/;
@@ -98,7 +95,7 @@ app.get('/test-cors', (req, res) => {
 const uploadPM = path.join(
   __dirname,
   "..",
-  "DATN_FE",
+  "duantn",
   "public",
   "images",
   "payment-Method"
@@ -206,7 +203,7 @@ const uploadUser = multer({ storage: storageUser });
 const uploadDir = path.join(
   __dirname,
   "..",
-  "DATN",
+  "duantn",
   "public",
   "images",
   "category"
@@ -248,7 +245,7 @@ module.exports = uploadCateProduct;
 const uploadBrand = path.join(
   __dirname,
   "..",
-  "DATN",
+  "duantn",
   "public",
   "images",
   "brand"
@@ -290,7 +287,7 @@ module.exports = uploadCateBrand;
 const uploadNews = path.join(
   __dirname,
   "..",
-  "DATN",
+  "duantn",
   "public",
   "images",
   "news"
@@ -332,7 +329,7 @@ module.exports = uploadCateNews;
 const uploadProduct = path.join(
   __dirname,
   "..",
-  "DATN",
+  "duantn",
   "public",
   "images",
   "product"
@@ -1053,7 +1050,8 @@ app.get('/auth/google/callback',
       { expiresIn: '1d' }
     );
     // Redirect về frontend kèm token
-    res.redirect(`https://fe-vclock.vercel.app/auth/google/success?token=${token}`);
+    const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0];
+    res.redirect(`${frontendUrl}/auth/google/success?token=${token}`);
   }
 );
 // ! end login Google
@@ -1073,7 +1071,8 @@ app.get('/auth/facebook/callback',
       { expiresIn: '1d' }
     );
     // Redirect về frontend kèm token
-    res.redirect(`https://fe-vclock.vercel.app/auth/facebook/success?token=${token}`);
+    const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0];
+    res.redirect(`${frontendUrl}/auth/facebook/success?token=${token}`);
   }
 );
 // Facebook Data Deletion Callback
@@ -1105,7 +1104,7 @@ app.post('/auth/facebook/delete-data', async (req, res) => {
     // 4. Phản hồi cho Facebook
     const confirmationCode = `delete_confirm_${userIdToDelete}`;
     res.json({
-      url: `https://bevclock-production.up.railway.app/auth/facebook/deletion-status/${confirmationCode}`,
+      url: `${SERVER_URL}/auth/facebook/deletion-status/${confirmationCode}`,
       confirmation_code: confirmationCode,
     });
 
@@ -1263,8 +1262,9 @@ const TempOrderSchema = require("./model/schemaTempOrder");
 const TempOrderModel = conn.model("TempOrders", TempOrderSchema);
 
 
-const YOUR_DOMAIN = "https://fe-vclock.vercel.app";
-const WEBHOOK_URL = process.env.WEBHOOK_URL || "https://bevclock-production.up.railway.app/receive-hook";
+const SERVER_URL = process.env.SERVER_URL;
+
+
 
 app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
   try {
@@ -1282,25 +1282,40 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
       created_at: new Date()
     });
 
+    // Chuyển orderCode thành số
+    const orderCodeStr = String(orderCode || '');
+    const numericOrderCode = parseInt(orderCodeStr.replace(/\D/g, '')) || Date.now();
+    
     const order = {
       amount: 2000,
-      description,
-      orderCode,
-      returnUrl: `${YOUR_DOMAIN}/checkout-success`,
-      cancelUrl: `${YOUR_DOMAIN}/checkout-cancel`,
-      webhookUrl: WEBHOOK_URL,
+      description: description || `Thanh toán đơn hàng ${orderCode}`,
+      orderCode: numericOrderCode,
+      returnUrl: `${process.env.CORS_ORIGIN?.split(',')[0]}/checkout-success`,
+      cancelUrl: `${process.env.CORS_ORIGIN?.split(',')[0]}/checkout-cancel`,
     };
+
+    // Kiểm tra PayOS credentials
+    if (!client_id || !api_key || !checksum_key) {
+      console.log("PayOS chưa được cấu hình, sử dụng mock payment link");
+      return res.json({ 
+        checkoutUrl: `${process.env.CORS_ORIGIN?.split(',')[0]}/checkout-success?orderCode=${orderCode}&status=success` 
+      });
+    }
 
     const paymentLink = await payos.createPaymentLink(order);
 
     res.json({ checkoutUrl: paymentLink.checkoutUrl });
   } catch (err) {
     console.error("Lỗi tạo payment link:", err);
-    res.status(500).json({ success: false, message: "Lỗi tạo link thanh toán" });
+    res.status(500).json({ 
+      success: false, 
+      message: "Lỗi tạo link thanh toán",
+      error: err.message 
+    });
   }
 });
 
-//  https://bevclock-production.up.railway.app/receive-hook
+//  http://localhost:3000/receive-hook
 app.post("/receive-hook", async (req, res) => {
   const data = req.body?.data;
   const status = req.body?.code; // mã "00" nghĩa là thành công
@@ -1399,14 +1414,26 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
 
     let finalAddressId = address_id;
 
+    // Tạo địa chỉ mới cho khách hàng chưa đăng nhập
     if (!address_id && new_address) {
+      // Validation cho địa chỉ mới
+      if (!new_address.name || !new_address.phone || !new_address.address) {
+        return res.status(400).json({ message: "Thiếu thông tin địa chỉ giao hàng." });
+      }
+      
       const newAddr = await AddressModel.create({
-        ...new_address,
+        receiver_name: new_address.name,
+        phone: new_address.phone,
+        address: new_address.address,
         user_id: user_id || null,
         created_at: new Date(),
         updated_at: new Date()
       });
       finalAddressId = newAddr._id;
+    }
+
+    if (!finalAddressId) {
+      return res.status(400).json({ message: "Thiếu địa chỉ giao hàng." });
     }
 
     const newOrder = await OrderModel.create({
@@ -1489,6 +1516,27 @@ app.post('/checkout/addresses', verifyOptionalToken, async (req, res) => {
 // ! end checkout
 
 // ! products
+// Price range endpoint - phải đặt trước /api/product/:id để tránh conflict
+app.get('/api/product/price-range', async (req, res) => {
+  try {
+    const products = await ProductModel.find({}, { price: 1, sale_price: 1 });
+    let minPrice = null;
+    let maxPrice = null;
+    products.forEach(p => {
+      const price = (p.sale_price && p.sale_price > 0) ? p.sale_price : p.price;
+      if (minPrice === null || (price < minPrice && price > 0)) {
+        minPrice = price;
+      }
+      if (maxPrice === null || price > maxPrice) {
+        maxPrice = price;
+      }
+    });
+    res.json({ minPrice: minPrice || 0, maxPrice: maxPrice || 0 });
+  } catch (err) {
+    res.status(500).json({ error: 'Lỗi lấy khoảng giá', details: err.message });
+  }
+});
+
 // http://localhost:3000/api/product/6833ff0acc1ed305e8513aae
 app.get('/api/product/:id', async (req, res) => {
   const { id } = req.params;
@@ -1714,26 +1762,6 @@ app.get('/api/products/top-rated', async function(req, res) {
     }
 });
 
-app.get('/api/product/price-range', async (req, res) => {
-  try {
-    const products = await ProductModel.find({}, { price: 1, sale_price: 1 });
-    let minPrice = null;
-    let maxPrice = null;
-    products.forEach(p => {
-      const price = (p.sale_price && p.sale_price > 0) ? p.sale_price : p.price;
-      if (minPrice === null || (price < minPrice && price > 0)) {
-        minPrice = price;
-      }
-      if (maxPrice === null || price > maxPrice) {
-        maxPrice = price;
-      }
-    });
-    res.json({ minPrice: minPrice || 0, maxPrice: maxPrice || 0 });
-  } catch (err) {
-    res.status(500).json({ error: 'Lỗi lấy khoảng giá', details: err.message });
-  }
-});
-  
 app.get('/api/sp_filter', async (req, res) => {
   const { category, brand, minPrice, maxPrice, sort, page = 1, limit = 12 } = req.query;
   let filter = {};
@@ -2417,35 +2445,33 @@ app.delete('/user/addresses/:id', verifyToken, async (req, res) => {
     try {
       const { q, brand, category, priceRange, sortBy } = req.query;
       
-      let query = {};
+      let matchQuery = {};
       
       // Tìm kiếm theo từ khóa
       if (q) {
-        query.$or = [
+        matchQuery.$or = [
           { name: { $regex: q, $options: 'i' } },
-          { description: { $regex: q, $options: 'i' } },
-          { brand: { $regex: q, $options: 'i' } },
-          { category: { $regex: q, $options: 'i' } }
+          { description: { $regex: q, $options: 'i' } }
         ];
       }
 
       // Filter theo brand
       if (brand) {
-        query.brand = { $regex: brand, $options: 'i' };
+        matchQuery['brand.name'] = { $regex: brand, $options: 'i' };
       }
 
       // Filter theo category
       if (category) {
-        query.category = { $regex: category, $options: 'i' };
+        matchQuery['category.name'] = { $regex: category, $options: 'i' };
       }
 
       // Filter theo price range
       if (priceRange) {
         const [min, max] = priceRange.split('-');
         if (max === '+') {
-          query.price = { $gte: parseInt(min) };
+          matchQuery.price = { $gte: parseInt(min) };
         } else {
-          query.price = { $gte: parseInt(min), $lte: parseInt(max) };
+          matchQuery.price = { $gte: parseInt(min), $lte: parseInt(max) };
         }
       }
 
@@ -2465,26 +2491,100 @@ app.delete('/user/addresses/:id', verifyToken, async (req, res) => {
           sort = { createdAt: -1 };
       }
 
-      const products = await ProductModel.find(query)
-        .sort(sort)
-        .limit(50)
-        .lean(); // Sử dụng lean() để tối ưu performance
+      const aggregationPipeline = [
+        { $match: { status: 0, quantity: { $gt: 0 } } }, // Chỉ lấy sản phẩm đang hoạt động
+        {
+          $lookup: {
+            from: 'brands',
+            localField: 'brand_id',
+            foreignField: '_id',
+            as: 'brand'
+          }
+        },
+        { $unwind: '$brand' },
+        { $match: { 'brand.brand_status': 0 } }, // Chỉ lấy sản phẩm của thương hiệu đang hoạt động
+        {
+          $lookup: {
+            from: 'product_categories',
+            localField: '_id',
+            foreignField: 'product_id',
+            as: 'productCategories'
+          }
+        },
+        {
+          $lookup: {
+            from: 'categories',
+            localField: 'productCategories.category_id',
+            foreignField: '_id',
+            as: 'category'
+          }
+        },
+        { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
+        { $match: matchQuery },
+        { $sort: sort },
+        { $limit: 50 },
+        {
+          $lookup: {
+            from: 'product_images',
+            localField: '_id',
+            foreignField: 'product_id',
+            as: 'images'
+          }
+        },
+        {
+          $addFields: {
+            main_image: {
+              $arrayElemAt: [
+                {
+                  $filter: {
+                    input: '$images',
+                    as: 'img',
+                    cond: { $eq: ['$$img.is_main', true] }
+                  }
+                },
+                0
+              ]
+            }
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            price: 1,
+            sale_price: 1,
+            description: 1,
+            status: 1,
+            quantity: 1,
+            brand: {
+              _id: 1,
+              name: 1
+            },
+            category: {
+              _id: 1,
+              name: 1
+            },
+            main_image: {
+              image: 1,
+              alt: 1
+            },
+            images: {
+              image: 1,
+              alt: 1
+            },
+            createdAt: 1
+          } },
+          // Thêm group để loại bỏ trùng lặp sản phẩm
+          { $group: {
+              _id: '$_id',
+              doc: { $first: '$$ROOT' }
+          } },
+          { $replaceRoot: { newRoot: '$doc' } },
+      ];
 
-      // Lấy ảnh cho từng sản phẩm
-      const productsWithImages = await Promise.all(
-        products.map(async (product) => {
-          const images = await ProductImageModel.find({ 
-            product_id: product._id 
-          }).sort({ is_main: -1 }).lean(); // Sắp xếp ảnh chính lên đầu
-          
-          return {
-            ...product,
-            images: images.map(img => img.image)
-          };
-        })
-      );
+      const products = await ProductModel.aggregate(aggregationPipeline);
 
-      res.json({ products: productsWithImages });
+      res.json({ products });
     } catch (error) {
       console.error('Search error:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -2740,12 +2840,27 @@ app.post('/user/wishlist/:productId', verifyToken, async (req, res) => {
     }
 });
 
+app.delete('/user/wishlist/all', verifyToken, async (req, res) => {
+  try {
+    let userId = req.user.userId;
+    if (typeof userId === 'string') {
+      const mongoose = require('mongoose');
+      userId = new mongoose.Types.ObjectId(userId);
+    }
+    const result = await WishlistModel.deleteMany({ user_id: userId });
+    
+    res.json({ message: 'Đã xóa toàn bộ wishlist', deletedCount: result.deletedCount });
+  } catch (error) {
+    console.error('Lỗi xóa wishlist:', error);
+    res.status(500).json({ message: 'Lỗi khi xóa toàn bộ wishlist', error: error.message });
+  }
+});
+
 app.delete('/user/wishlist/:productId', verifyToken, async (req, res) => {
     try {
         const userId = req.user.userId;
         const productId = req.params.productId;
 
-        // Find and delete the wishlist item
         const result = await WishlistModel.findOneAndDelete({
             user_id: userId,
             product_id: productId
@@ -3200,10 +3315,6 @@ app.get("/api/voucher-user/debug/:voucher_id", verifyToken, async (req, res) => 
   }
 });
 
-// ! end voucher
-
-// ! <== Admin ==>
-// ! <== Search ALl =>
 app.get("/api/admin/search", async (req, res) => {
   const searchTerm = req.query.q?.toString().trim() || "";
 
@@ -3370,16 +3481,34 @@ app.post(
   "/api/admin/categoryProduct/them",
   uploadCateProduct.single("image"),
   async function (req, res) {
-    const { name, alt, category_status } = req.body;
-    const image = req.file ? `${req.file.filename}` : null;
-
     try {
+      const { name, alt, category_status } = req.body;
+      const image = req.file ? `${req.file.filename}` : null;
+
+      // Validation
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ error: "Tên danh mục không được để trống!" });
+      }
+
+      if (!alt || typeof alt !== 'string' || !alt.trim()) {
+        return res.status(400).json({ error: "Alt không được để trống!" });
+      }
+
+      if (!image) {
+        return res.status(400).json({ error: "Vui lòng chọn ảnh cho danh mục!" });
+      }
+
+      // Kiểm tra tên danh mục đã tồn tại
+      const existingCategory = await CategoryModel.findOne({ name: name.trim() });
+      if (existingCategory) {
+        return res.status(400).json({ error: "Tên danh mục đã tồn tại!" });
+      }
+
       const newLoai = new CategoryModel({
-        name,
+        name: name.trim(),
         image,
-        alt,
-        category_status:
-          category_status == undefined ? 0 : parseInt(category_status),
+        alt: alt.trim(),
+        category_status: category_status == undefined ? 0 : parseInt(category_status),
         created_at: new Date(),
         updated_at: new Date(),
       });
@@ -3387,7 +3516,8 @@ app.post(
       await newLoai.save();
       res.status(200).json({ message: "Thêm loại sản phẩm thành công!" });
     } catch (error) {
-      res.status(500).json({ error: "Tên danh mục đã tồn tại!" });
+      console.error("Lỗi khi thêm danh mục:", error);
+      res.status(500).json({ error: "Lỗi khi thêm danh mục: " + error.message });
     }
   }
 );
@@ -3469,9 +3599,7 @@ app.get("/api/admin/product", async function (req, res) {
   const brandFilter = req.query.brandFilter;
   const sortOption = req.query.sort || "newest";
 
-  let query = {};
   let sortQuery = {};
-
   switch (sortOption) {
     case "newest":
       sortQuery = { created_at: -1 };
@@ -3487,47 +3615,46 @@ app.get("/api/admin/product", async function (req, res) {
       break;
     default:
       sortQuery = { created_at: -1 };
-      break;
-  }
-
-  if (searchTerm) {
-    query.name = { $regex: searchTerm, $options: "i" };
-  }
-
-  if (statusFilter && statusFilter != "all") {
-    if (statusFilter == "0") {
-      query.quantity = 0;
-    } else if (statusFilter == "1") {
-      query.quantity = { $gt: 0 };
-    }
-  }
-
-  if (categoryFilter && categoryFilter != "all") {
-    const categoryMappings = await ProductCategoriesModel.find({
-      category_id: categoryFilter,
-    });
-    const productIds = categoryMappings.map((item) => item.product_id);
-    query._id = { $in: productIds };
-  }
-
-  if (brandFilter && brandFilter != "all") {
-    query.brand_id = brandFilter;
   }
 
   try {
-    const total = await ProductModel.countDocuments(query);
-    const products = await ProductModel.find(query)
-      .populate({
-        path: "brand_id",
-        model: "brands",
-        select: "name",
-      })
-      .sort(sortQuery)
-      .skip(skip)
-      .limit(limit);
+    let productFilterQuery = {};
+
+    let categoryProductIds = null;
+    if (categoryFilter && categoryFilter != "all") {
+      const mappings = await ProductCategoriesModel.find({
+        category_id: categoryFilter,
+      }).select("product_id");
+
+      categoryProductIds = mappings.map((m) => m.product_id.toString());
+    }
+
+    if (searchTerm) {
+      productFilterQuery.name = { $regex: searchTerm, $options: "i" };
+    }
+
+    if (statusFilter && statusFilter != "all") {
+      productFilterQuery.quantity = statusFilter == "0" ? 0 : { $gt: 0 };
+    }
+
+    if (brandFilter && brandFilter != "all") {
+      productFilterQuery.brand_id = brandFilter;
+    }
+
+    if (categoryProductIds) {
+      productFilterQuery._id = { $in: categoryProductIds };
+    }
+
+    const allFilteredProducts = await ProductModel.find(
+      productFilterQuery
+    ).sort(sortQuery);
+
+    const total = allFilteredProducts.length;
+
+    const paginatedProducts = allFilteredProducts.slice(skip, skip + limit);
 
     const list = await Promise.all(
-      products.map(async (product) => {
+      paginatedProducts.map(async (product) => {
         const main_image = await ProductImageModel.findOne({
           product_id: product._id,
           is_main: true,
@@ -3550,8 +3677,14 @@ app.get("/api/admin/product", async function (req, res) {
 
         const sold_count = sold[0]?.total || 0;
 
+        const populatedProduct = await ProductModel.populate(product, {
+          path: "brand_id",
+          model: "brands",
+          select: "name",
+        });
+
         return {
-          ...product.toObject(),
+          ...populatedProduct.toObject(),
           main_image,
           categories,
           sold: sold_count,
@@ -3561,6 +3694,7 @@ app.get("/api/admin/product", async function (req, res) {
 
     res.json({ list, total });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: "Lỗi khi lấy danh sách sản phẩm." });
   }
 });
@@ -3641,6 +3775,11 @@ app.post(
         category_ids,
       } = req.body;
 
+      // Validation
+      if (!name || !brand_id || !price || !quantity) {
+        return res.status(400).json({ error: "Thiếu thông tin bắt buộc!" });
+      }
+
       const existingProduct = await ProductModel.findOne({ name: name.trim() });
       if (existingProduct) {
         return res.status(400).json({ error: "Tên sản phẩm đã tồn tại!" });
@@ -3648,29 +3787,30 @@ app.post(
 
       const newProduct = await ProductModel.create({
         brand_id,
-        name,
-        description,
-        price,
-        sale_price,
-        status,
-        quantity,
-        sex,
-        case_diameter,
-        style,
-        features,
-        water_resistance,
-        thickness,
-        color,
-        machine_type,
-        strap_material,
-        case_material,
+        name: name.trim(),
+        description: description || "",
+        price: parseFloat(price) || 0,
+        sale_price: parseFloat(sale_price) || 0,
+        status: status || "0",
+        quantity: parseInt(quantity) || 0,
+        sex: sex || "",
+        case_diameter: case_diameter || "",
+        style: style || "",
+        features: features || "",
+        water_resistance: water_resistance || "",
+        thickness: thickness || "",
+        color: color || "",
+        machine_type: machine_type || "",
+        strap_material: strap_material || "",
+        case_material: case_material || "",
         created_at: new Date(),
         updated_at: new Date(),
       });
 
       const productId = newProduct._id;
 
-      if (req.files["main_image"]?.length) {
+      // Xử lý ảnh chính
+      if (req.files && req.files["main_image"] && req.files["main_image"].length > 0) {
         const main = req.files["main_image"][0];
         await ProductImageModel.create({
           product_id: productId,
@@ -3681,7 +3821,8 @@ app.post(
         });
       }
 
-      if (req.files["sub_images"]?.length) {
+      // Xử lý ảnh phụ
+      if (req.files && req.files["sub_images"] && req.files["sub_images"].length > 0) {
         const subImgs = req.files["sub_images"];
         const subDocs = subImgs.map((img) => ({
           product_id: productId,
@@ -3693,19 +3834,26 @@ app.post(
         await ProductImageModel.insertMany(subDocs);
       }
 
-      const categories = category_ids?.split(",") || [];
-      await Promise.all(
-        categories.map((categoryId) =>
-          ProductCategoriesModel.create({
-            product_id: productId,
-            category_id: categoryId,
-          })
-        )
-      );
+      // Xử lý danh mục
+      if (category_ids) {
+        const categories = Array.isArray(category_ids)
+          ? category_ids
+          : [category_ids];
+        
+        await Promise.all(
+          categories.map((categoryId) =>
+            ProductCategoriesModel.create({
+              product_id: productId,
+              category_id: categoryId,
+            })
+          )
+        );
+      }
 
       res.status(200).json({ message: "Thêm sản phẩm thành công!" });
     } catch (error) {
-      res.status(500).json({ error: "Lỗi khi thêm sản phẩm." });
+      console.error("Lỗi khi thêm sản phẩm:", error);
+      res.status(500).json({ error: "Lỗi khi thêm sản phẩm: " + error.message });
     }
   }
 );
@@ -3811,7 +3959,11 @@ app.put(
         await ProductImageModel.insertMany(subDocs);
       }
 
-      const categories = category_ids?.split(",") || [];
+      const categories = Array.isArray(category_ids)
+        ? category_ids
+        : category_ids
+        ? [category_ids]
+        : [];
       await ProductCategoriesModel.deleteMany({ product_id: productId });
 
       await Promise.all(
@@ -3952,21 +4104,6 @@ app.get("/api/admin/user", async (req, res) => {
           as: "addresses",
         },
       },
-      {
-        $project: {
-          _id: 1,
-          username: 1,
-          email: 1,
-          fullName: 1,
-          avatar: 1,
-          role: 1,
-          account_status: 1,
-          created_at: 1,
-          updated_at: 1,
-          addresses: 1,
-          roleNumeric: 1
-        }
-      }
     ]);
 
     const roleAggregation = await UserModel.aggregate([
@@ -4105,7 +4242,7 @@ app.get("/api/admin/user/:id", verifyToken, async (req, res) => {
 
 app.put(
   "/api/admin/user/edit/:id",
-  uploadUser.single("image"),
+  uploadAvatar.single("image"),
   verifyToken,
   async (req, res) => {
     const { id } = req.params;
@@ -4235,7 +4372,7 @@ app.put(
 app.post(
   "/api/admin/user/add",
   verifyToken,
-  uploadUser.single("image"),
+  uploadAvatar.single("image"),
   async (req, res) => {
     try {
       const currentUser = req.user;
@@ -4308,46 +4445,6 @@ app.post(
   }
 );
 
-// * Đặt lại mật khẩu
-app.post("/api/admin/user/doiMk/:id", verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const { newPassword } = req.body;
-  const currentUser = req.user;
-
-  if (Number(currentUser.role) != 2) {
-    return res
-      .status(403)
-      .json({ message: "Bạn không có quyền reset mật khẩu" });
-  }
-
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ message: "ID không hợp lệ" });
-  }
-
-  try {
-    const targetUser = await UserModel.findById(id);
-    if (!targetUser) {
-      return res.status(404).json({ message: "Không tìm thấy người dùng" });
-    }
-
-    if (targetUser._id.equals(currentUser._id)) {
-      return res
-        .status(400)
-        .json({ message: "Không thể tự reset mật khẩu của chính mình" });
-    }
-
-    const hashed = await bcrypt.hash(newPassword, 10);
-    await UserModel.findByIdAndUpdate(id, {
-      password_hash: hashed,
-      updated_at: new Date(),
-    });
-
-    res.json({ message: "Đặt lại mật khẩu thành công" });
-  } catch (error) {
-    res.status(500).json({ message: "Lỗi server" });
-  }
-});
-
 app.delete("/api/admin/user/delete/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
   const currentUser = req.user;
@@ -4410,229 +4507,7 @@ app.delete("/api/admin/user/delete/:id", verifyToken, async (req, res) => {
     });
   }
 });
-
 // ! <== End User ==>
-
-// ! <== start User address admin ==>\
-app.get("/api/admin/user/addresses", verifyToken, async (req, res) => {
-  try {
-    const { user_id } = req.query;
-    const requestUserId = req.user.userId;
-    const userRole = req.user.role;
-
-    if (user_id) {
-      if (userRole < 1 && user_id != requestUserId) {
-        return res.status(403).json({
-          message: "Bạn không có quyền xem địa chỉ của người dùng này",
-          error: "PERMISSION_DENIED",
-        });
-      }
-
-      const addresses = await AddressModel.find({ user_id: user_id });
-      res.json(addresses);
-    } else {
-      const addresses = await AddressModel.find({ user_id: requestUserId });
-      res.json(addresses);
-    }
-  } catch (error) {
-    res.status(500).json({
-      message: "Lỗi server khi lấy danh sách địa chỉ",
-      error: error.message,
-    });
-  }
-});
-
-app.get("/api/admin/user/addresses/:id", verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const requestUserId = req.user.userId;
-    const userRole = req.user.role;
-
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        message: "ID địa chỉ không hợp lệ",
-        error: "INVALID_ADDRESS_ID",
-      });
-    }
-
-    const address = await AddressModel.findById(id);
-
-    if (!address) {
-      return res.status(404).json({
-        message: "Không tìm thấy địa chỉ",
-        error: "ADDRESS_NOT_FOUND",
-      });
-    }
-
-    if (userRole < 1 && address.user_id != requestUserId) {
-      return res.status(403).json({
-        message: "Bạn không có quyền xem địa chỉ này",
-        error: "PERMISSION_DENIED",
-      });
-    }
-
-    const responseData = {
-      _id: address._id,
-      user_id: address.user_id,
-      receiver_name: address.receiver_name,
-      phone: address.phone,
-      address: address.address,
-      created_at: address.created_at,
-      updated_at: address.updated_at,
-    };
-
-    res.json({
-      message: "Lấy chi tiết địa chỉ thành công",
-      data: responseData,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Lỗi server khi lấy chi tiết địa chỉ",
-      error: error.message,
-    });
-  }
-});
-
-app.put("/api/admin/user/addresses/:id", verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { receiver_name, phone, address } = req.body;
-    const requestUserId = req.user.userId;
-    const userRole = req.user.role;
-
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        message: "ID địa chỉ không hợp lệ",
-        error: "INVALID_ADDRESS_ID",
-      });
-    }
-
-    if (!receiver_name && !phone && !address) {
-      return res.status(400).json({
-        message: "Cần ít nhất một trường để cập nhật",
-        error: "MISSING_FIELDS",
-      });
-    }
-
-    if (
-      phone &&
-      (isNaN(phone) ||
-        phone.toString().length < 10 ||
-        phone.toString().length > 11)
-    ) {
-      return res.status(400).json({
-        message: "Số điện thoại không hợp lệ (10-11 chữ số)",
-        error: "INVALID_PHONE",
-      });
-    }
-
-    const addressToUpdate = await AddressModel.findById(id);
-    if (!addressToUpdate) {
-      return res.status(404).json({
-        message: "Không tìm thấy địa chỉ",
-        error: "ADDRESS_NOT_FOUND",
-      });
-    }
-
-    if (userRole < 1 && addressToUpdate.user_id != requestUserId) {
-      return res.status(403).json({
-        message: "Bạn không có quyền cập nhật địa chỉ này",
-        error: "PERMISSION_DENIED",
-      });
-    }
-
-    if (receiver_name != undefined) {
-      addressToUpdate.receiver_name = receiver_name;
-    }
-    if (phone != undefined) {
-      addressToUpdate.phone = phone;
-    }
-    if (address != undefined) {
-      addressToUpdate.address = address;
-    }
-
-    addressToUpdate.updated_at = new Date();
-
-    await addressToUpdate.save();
-
-    const responseData = {
-      _id: addressToUpdate._id,
-      user_id: addressToUpdate.user_id,
-      receiver_name: addressToUpdate.receiver_name,
-      phone: addressToUpdate.phone,
-      address: addressToUpdate.address,
-      created_at: addressToUpdate.created_at,
-      updated_at: addressToUpdate.updated_at,
-    };
-
-    res.json({
-      message: "Cập nhật địa chỉ thành công",
-      data: responseData,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Lỗi server khi cập nhật địa chỉ",
-      error: error.message,
-    });
-  }
-});
-
-app.post("/api/admin/user/addresses", verifyToken, async (req, res) => {
-  try {
-    const { receiver_name, phone, address, user_id } = req.body;
-    const requestUserId = req.user.userId;
-
-    const targetUserId = user_id || requestUserId;
-
-    if (req.user.role < 1 && targetUserId != requestUserId) {
-      return res.status(403).json({
-        message: "Bạn không có quyền tạo địa chỉ cho người khác",
-        error: "PERMISSION_DENIED",
-      });
-    }
-
-    if (!receiver_name && !phone && !address) {
-      return res.status(400).json({
-        message: "Cần ít nhất một trường để tạo địa chỉ",
-        error: "MISSING_FIELDS",
-      });
-    }
-
-    if (
-      phone &&
-      (isNaN(phone) ||
-        phone.toString().length < 10 ||
-        phone.toString().length > 11)
-    ) {
-      return res.status(400).json({
-        message: "Số điện thoại không hợp lệ (10-11 chữ số)",
-        error: "INVALID_PHONE",
-      });
-    }
-
-    const newAddress = new AddressModel({
-      user_id: targetUserId,
-      receiver_name: receiver_name || "",
-      phone: phone || null,
-      address: address || "",
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
-
-    await newAddress.save();
-
-    res.status(201).json({
-      message: "Tạo địa chỉ thành công",
-      data: newAddress,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Lỗi server khi tạo địa chỉ",
-      error: error.message,
-    });
-  }
-});
-// ! <== end user address admin ==>
 
 // ! <== Order ==>
 app.get("/api/admin/order", async (req, res) => {
@@ -4644,6 +4519,24 @@ app.get("/api/admin/order", async (req, res) => {
   const statusFilter = req.query.statusFilter;
   const paymentStatusFilter = req.query.paymentStatusFilter;
   const sortOption = req.query.sort || "newest";
+
+  // Định nghĩa status mapping
+  const statusMapping = {
+    'choXuLy': 'pending',
+    'dangXuLy': 'processing',
+    'dangGiaoHang': 'shipping',
+    'daGiaoHang': 'delivered',
+    'daHuy': 'cancelled',
+    'hoanTra': 'returned',
+    'hoanThanh': 'completed'
+  };
+
+  const paymentStatusMapping = {
+    'chuaThanhToan': 'unpaid',
+    'thanhToan': 'paid',
+    'choHoanTien': 'refunding',
+    'hoanTien': 'refunded'
+  };
 
   let query = {};
   let sortQuery = {};
@@ -4758,7 +4651,43 @@ app.get("/api/admin/order", async (req, res) => {
       order.details = populatedDetails;
     }
 
+    // Map trạng thái từ backend sang frontend
+    const reverseStatusMapping = Object.fromEntries(
+      Object.entries(statusMapping).map(([key, value]) => [value, key])
+    );
+
+    const reversePaymentStatusMapping = Object.fromEntries(
+      Object.entries(paymentStatusMapping).map(([key, value]) => [value, key])
+    );
+
+    console.log('Status mapping:', reverseStatusMapping);
+    console.log('Payment status mapping:', reversePaymentStatusMapping);
+
+    for (const order of list) {
+      // Map trạng thái đơn hàng
+      if (order.order_status && reverseStatusMapping[order.order_status]) {
+        console.log('Mapping order status:', order.order_status, 'to:', reverseStatusMapping[order.order_status]);
+        order.order_status = reverseStatusMapping[order.order_status];
+      }
+
+      // Map trạng thái thanh toán
+      if (order.payment_status && reversePaymentStatusMapping[order.payment_status]) {
+        console.log('Mapping payment status:', order.payment_status, 'to:', reversePaymentStatusMapping[order.payment_status]);
+        order.payment_status = reversePaymentStatusMapping[order.payment_status];
+      }
+    }
+
     const allOrders = await OrderModel.find({}).lean();
+
+    // Map trạng thái cho allOrders để đếm chính xác
+    for (const order of allOrders) {
+      if (order.order_status && reverseStatusMapping[order.order_status]) {
+        order.order_status = reverseStatusMapping[order.order_status];
+      }
+      if (order.payment_status && reversePaymentStatusMapping[order.payment_status]) {
+        order.payment_status = reversePaymentStatusMapping[order.payment_status];
+      }
+    }
 
     const countByStatus = (orders) => {
       return orders.reduce((acc, order) => {
@@ -4834,10 +4763,40 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
   const id = req.params.id;
   const { order_status, payment_status } = req.body;
 
+  // Mapping trạng thái từ frontend sang backend
+  const statusMapping = {
+    'choXuLy': 'pending',
+    'dangXuLy': 'processing', 
+    'dangGiaoHang': 'shipping',
+    'daGiaoHang': 'delivered',
+    'daHuy': 'cancelled',
+    'hoanTra': 'returned',
+    'hoanThanh': 'completed'
+  };
+
+  const paymentStatusMapping = {
+    'chuaThanhToan': 'unpaid',
+    'thanhToan': 'paid',
+    'choHoanTien': 'refunding',
+    'hoanTien': 'refunded'
+  };
+
   try {
+    let updateData = { updated_at: new Date() };
+
+    if (order_status) {
+      const backendStatus = statusMapping[order_status] || order_status;
+      updateData.order_status = backendStatus;
+    }
+
+    if (payment_status) {
+      const backendPaymentStatus = paymentStatusMapping[payment_status] || payment_status;
+      updateData.payment_status = backendPaymentStatus;
+    }
+
     const updated = await OrderModel.findByIdAndUpdate(
       id,
-      { order_status, payment_status, updated_at: new Date() },
+      updateData,
       { new: true }
     );
 
@@ -5408,15 +5367,34 @@ app.post(
   "/api/admin/brand/add",
   uploadCateBrand.single("image"),
   async function (req, res) {
-    const { name, alt, brand_status, description } = req.body;
-    const image = req.file ? `${req.file.filename}` : null;
-
     try {
+      const { name, alt, brand_status, description } = req.body;
+      const image = req.file ? `${req.file.filename}` : null;
+
+      // Validation
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ error: "Tên thương hiệu không được để trống!" });
+      }
+
+      if (!alt || typeof alt !== 'string' || !alt.trim()) {
+        return res.status(400).json({ error: "Alt không được để trống!" });
+      }
+
+      if (!image) {
+        return res.status(400).json({ error: "Vui lòng chọn ảnh cho thương hiệu!" });
+      }
+
+      // Kiểm tra tên thương hiệu đã tồn tại
+      const existingBrand = await BrandModel.findOne({ name: name.trim() });
+      if (existingBrand) {
+        return res.status(400).json({ error: "Tên thương hiệu đã tồn tại!" });
+      }
+
       const newLoai = new BrandModel({
-        name,
+        name: name.trim(),
         image,
-        alt,
-        description,
+        alt: alt.trim(),
+        description: description || "",
         brand_status: brand_status == undefined ? 0 : parseInt(brand_status),
         created_at: new Date(),
         updated_at: new Date(),
@@ -5425,7 +5403,8 @@ app.post(
       await newLoai.save();
       res.status(200).json({ message: "Thêm thương hiệu thành công!" });
     } catch (error) {
-      res.status(500).json({ error: "Tên thương hiệu đã tồn tại!" });
+      console.error("Lỗi khi thêm thương hiệu:", error);
+      res.status(500).json({ error: "Lỗi khi thêm thương hiệu: " + error.message });
     }
   }
 );
@@ -5806,7 +5785,7 @@ app.delete("/api/admin/payment-method/xoa/:id", async (req, res) => {
 // ! <== Start edit account admin ==>
 app.put(
   "/api/admin/account/edit/:id",
-  uploadUser.single("image"),
+  uploadAvatar.single("image"),
   async (req, res) => {
     const { id } = req.params;
     const { username, fullName, avatar, password } = req.body;
@@ -5985,11 +5964,16 @@ app.get("/check-role", (req, res) => {
       .json({ success: false, message: "Token invalid or expired" });
   }
 });
-// ! <== End edit account admin ==>
 
+app.get("/check-username", async (req, res) => {
+  const { username } = req.query;
+  const user = await UserModel.findOne({ username });
+  res.json({ exists: !!user });
+});
+// ! <== End edit account admin ==>
 
 server.listen(port, () => {
   console.log(`🚀 Server đang chạy trên port ${port}`);
   console.log(`📡 MongoDB URI: ${MONGODB_URI}`);
-  console.log(`🌐 CORS Origin: ${process.env.CORS_ORIGIN || 'http://localhost:3005'}`);
+  console.log(`🌐 CORS Origin: ${process.env.CORS_ORIGIN || 'Not configured'}`);
 });

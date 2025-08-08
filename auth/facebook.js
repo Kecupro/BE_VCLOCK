@@ -8,7 +8,7 @@ require('dotenv').config();
 passport.use(new FacebookStrategy({
     clientID: process.env.FACEBOOK_APP_ID,
     clientSecret: process.env.FACEBOOK_APP_SECRET,
-    callbackURL: "https://bevclock-production.up.railway.app/auth/facebook/callback",
+    callbackURL: `${process.env.SERVER_URL}/auth/facebook/callback`,
     profileFields: ['id', 'displayName', 'emails', 'photos'] 
   },
   async (accessToken, refreshToken, profile, done) => {
