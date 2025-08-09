@@ -25,6 +25,15 @@ const port = process.env.PORT || 3000;
 const cors = require('cors');
 const slugify = require('slugify');
 const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// Cấu hình Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const bcrypt = require('bcrypt');
 const path = require('path');
@@ -80,25 +89,13 @@ app.get('/test-cors', (req, res) => {
   });
 });
 
-const uploadPM = path.join(
-  __dirname,
-  "..",
-  "duantn",
-  "public",
-  "images",
-  "payment-Method"
-);
-
-const storagePM = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadPM);
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const randomNum = Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, ext).replace(/\s+/g, "-");
-    cb(null, `${baseName}-${timestamp}-${randomNum}${ext}`);
+// Cloudinary storage cho payment methods
+const storagePM = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'vclock/payment-methods',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 300, height: 200, crop: 'limit' }]
   },
 });
 
@@ -107,39 +104,17 @@ const uploadPMs = multer({
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
-    if (!allowedTypes.includes(file.mimetype)) {
-      return cb(
-        new Error("Chỉ cho phép file ảnh (.jpg, .jpeg, .png, .webp)!"),
-        false
-      );
-    }
-    cb(null, true);
-  },
 });
 
-module.exports = uploadPMs;
+// module.exports = uploadPMs; // Removed to avoid conflict
 
-const uploadAvt = path.join(
-  __dirname,
-  "..",
-  "duantn",
-  "public",
-  "images",
-  "avatar"
-);
-
-const storageAvt = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadAvt);
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const randomNum = Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, ext).replace(/\s+/g, "-");
-    cb(null, `${baseName}-${timestamp}-${randomNum}${ext}`);
+// Cloudinary storage cho upload avatar phụ
+const storageAvt = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'vclock/avatars',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 500, height: 500, crop: 'limit' }]
   },
 });
 
@@ -148,60 +123,31 @@ const uploadAvatar = multer({
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
-    if (!allowedTypes.includes(file.mimetype)) {
-      return cb(
-        new Error("Chỉ cho phép file ảnh (.jpg, .jpeg, .png, .webp)!"),
-        false
-      );
-    }
-    cb(null, true);
-  },
 });
 
-module.exports = uploadAvatar;
+// module.exports = uploadAvatar; // Removed to avoid conflict
 
-const storageUser = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = path.join(
-      __dirname,
-      "..",
-      "duantn",
-      "public",
-      "images",
-      "avatar"
-    );
-    cb(null, uploadDir);
-  },
-
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const fileExtension = path.extname(file.originalname);
-    cb(null, file.fieldname + "-" + uniqueSuffix + fileExtension);
+// Cloudinary storage cho avatar
+const storageUser = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'vclock/avatars',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 500, height: 500, crop: 'limit' }]
   },
 });
-const uploadUser = multer({ storage: storageUser });
+const uploadUser = multer({ 
+  storage: storageUser,
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
 
-const uploadDir = path.join(
-  __dirname,
-  "..",
-  "duantn",
-  "public",
-  "images",
-  "category"
-);
-
-const storageCateProduct = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const randomNum = Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, ext).replace(/\s+/g, "-");
-    cb(null, `${baseName}-${timestamp}-${randomNum}${ext}`);
+// Cloudinary storage cho category
+const storageCateProduct = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'vclock/categories',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 800, height: 600, crop: 'limit' }]
   },
 });
 
@@ -210,39 +156,17 @@ const uploadCateProduct = multer({
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
-    if (!allowedTypes.includes(file.mimetype)) {
-      return cb(
-        new Error("Chỉ cho phép file ảnh (.jpg, .jpeg, .png, .webp)!"),
-        false
-      );
-    }
-    cb(null, true);
-  },
 });
 
-module.exports = uploadCateProduct;
+// module.exports = uploadCateProduct; // Removed to avoid conflict
 
-const uploadBrand = path.join(
-  __dirname,
-  "..",
-  "duantn",
-  "public",
-  "images",
-  "brand"
-);
-
-const storageBrand = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadBrand);
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const randomNum = Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, ext).replace(/\s+/g, "-");
-    cb(null, `${baseName}-${timestamp}-${randomNum}${ext}`);
+// Cloudinary storage cho brand
+const storageBrand = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'vclock/brands',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 400, height: 300, crop: 'limit' }]
   },
 });
 
@@ -251,39 +175,17 @@ const uploadCateBrand = multer({
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
-    if (!allowedTypes.includes(file.mimetype)) {
-      return cb(
-        new Error("Chỉ cho phép file ảnh (.jpg, .jpeg, .png, .webp)!"),
-        false
-      );
-    }
-    cb(null, true);
-  },
 });
 
-module.exports = uploadCateBrand;
+// module.exports = uploadCateBrand; // Removed to avoid conflict
 
-const uploadNews = path.join(
-  __dirname,
-  "..",
-  "duantn",
-  "public",
-  "images",
-  "news"
-);
-
-const storageCateNews = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadNews);
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const randomNum = Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, ext).replace(/\s+/g, "-");
-    cb(null, `${baseName}-${timestamp}-${randomNum}${ext}`);
+// Cloudinary storage cho news
+const storageCateNews = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'vclock/news',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 1200, height: 800, crop: 'limit' }]
   },
 });
 
@@ -292,39 +194,17 @@ const uploadCateNews = multer({
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
-    if (!allowedTypes.includes(file.mimetype)) {
-      return cb(
-        new Error("Chỉ cho phép file ảnh (.jpg, .jpeg, .png, .webp)!"),
-        false
-      );
-    }
-    cb(null, true);
-  },
 });
 
-module.exports = uploadCateNews;
+// module.exports = uploadCateNews; // Removed to avoid conflict
 
-const uploadProduct = path.join(
-  __dirname,
-  "..",
-  "duantn",
-  "public",
-  "images",
-  "product"
-);
-
-const storageProduct = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadProduct);
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const randomNum = Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, ext).replace(/\s+/g, "-");
-    cb(null, `${baseName}-${timestamp}-${randomNum}${ext}`);
+// Cloudinary storage cho product
+const storageProduct = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'vclock/products',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 1000, height: 1000, crop: 'limit' }]
   },
 });
 
@@ -333,19 +213,9 @@ const uploadDoneProduct = multer({
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
-    if (!allowedTypes.includes(file.mimetype)) {
-      return cb(
-        new Error("Chỉ cho phép file ảnh (.jpg, .jpeg, .png, .webp)!"),
-        false
-      );
-    }
-    cb(null, true);
-  },
 });
 
-module.exports = uploadDoneProduct;
+// module.exports = uploadDoneProduct; // Removed to avoid conflict
 
 const ObjectId = mongoose.Types.ObjectId;
 const newsSchema = require("./model/schemaNews");
@@ -366,6 +236,7 @@ const addressSchema = require("./model/schemaAddress");
 const PaymentMethoaShema = require("./model/schemaPaymentMethods");
 const MessageSchema = require("./model/schemaMessage");
 const ConversationSchema = require("./model/schemaConversation");
+const NotificationSchema = require("./model/schemaNotification");
 
 const NewsModel = conn.model("news", newsSchema);
 const CategoryNewsModel = conn.model("category_news", categoryNewsSchema);
@@ -388,6 +259,7 @@ const AddressModel = conn.model("address", addressSchema);
 const PaymentMethodModel = conn.model("payment_methods", PaymentMethoaShema);
 const MessageModel = conn.model("messages", MessageSchema);
 const ConversationModel = conn.model("conversations", ConversationSchema);
+const NotificationModel = conn.model("notifications", NotificationSchema);
 
 const verifyOptionalToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -545,7 +417,33 @@ app.get('/api/messages/:conversationId', verifyOptionalToken, async (req, res) =
 
   try {
     const messages = await MessageModel.find({ conversationId }).sort({ createdAt: 1 });
-    res.json(messages);
+    
+    // Populate thông tin user cho messages
+    const populatedMessages = await Promise.all(
+      messages.map(async (msg) => {
+        try {
+          // Bỏ qua nếu là admin hoặc guest
+          if (msg.senderId === 'admin-id' || msg.senderId === 'guest' || !msg.senderId.match(/^[0-9a-fA-F]{24}$/)) {
+            return msg.toObject();
+          }
+          
+          const user = await UserModel.findById(msg.senderId).select('username fullName avatar');
+          if (user) {
+            return {
+              ...msg.toObject(),
+              senderName: user.fullName || user.username || msg.senderName,
+              senderAvatar: user.avatar || msg.senderAvatar,
+            };
+          }
+          return msg.toObject();
+        } catch (error) {
+          console.error('Error fetching user for message:', error);
+          return msg.toObject();
+        }
+      })
+    );
+    
+    res.json(populatedMessages);
   } catch (error) {
     res.status(500).json({ error: 'Internal Server Error' });
   }
@@ -554,8 +452,42 @@ app.get('/api/messages/:conversationId', verifyOptionalToken, async (req, res) =
 app.get('/api/conversations', async (req, res) => {
   try {
     const conversations = await ConversationModel.find().sort({ lastTime: -1 });
-    res.json(conversations);
+    
+    const populatedConversations = await Promise.all(
+      conversations.map(async (conv) => {
+        const updatedParticipants = await Promise.all(
+          conv.participants.map(async (participant) => {
+            try {
+              if (participant.userId === 'admin-id' || participant.userId === 'guest' || !participant.userId.match(/^[0-9a-fA-F]{24}$/)) {
+                return participant;
+              }
+              
+              const user = await UserModel.findById(participant.userId).select('username fullName avatar');
+              if (user) {
+                return {
+                  userId: participant.userId,
+                  userName: user.fullName || user.username || participant.userName,
+                  userAvatar: user.avatar || participant.userAvatar,
+                };
+              }
+              return participant;
+            } catch (error) {
+              console.error('Error fetching user:', error);
+              return participant;
+            }
+          })
+        );
+        
+        return {
+          ...conv.toObject(),
+          participants: updatedParticipants,
+        };
+      })
+    );
+    
+    res.json(populatedConversations);
   } catch (error) {
+    console.error('Error fetching conversations:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -596,38 +528,22 @@ app.delete('/api/conversations/:conversationId', async (req, res) => {
   }
 });
 
-const avatarUploadPath = path.join(__dirname, '..', 'duantn', 'public', 'images', 'avatar');
-if (!fs.existsSync(avatarUploadPath)) {
-  fs.mkdirSync(avatarUploadPath, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, avatarUploadPath);
+// Cloudinary storage cho upload avatar chính
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'vclock/avatars',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 500, height: 500, crop: 'limit' }]
   },
-  filename: function (req, file, cb) {
-    const timestamp = Date.now();
-    const randomNum = Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, ext).replace(/\s+/g, "-");
-    cb(null, `${baseName}-${timestamp}-${randomNum}${ext}`);
-  }
 });
-
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png' || file.mimetype === 'image/webp' || file.mimetype === 'image/jpg') {
-    cb(null, true);
-  } else {
-    cb(new Error('Chỉ chấp nhận file ảnh (jpeg, png, webp, jpg)'), false);
-  }
-};
 
 const upload = multer({ 
   storage: storage, 
-  limits: { fileSize: 1024 * 1024 * 10 }, 
-  fileFilter: fileFilter 
+  limits: { fileSize: 1024 * 1024 * 10 }
 });
 
+// Static images - hỗ trợ cả local và Cloudinary
 app.use('/images', exp.static(path.join(__dirname, '..', 'duantn', 'public', 'images')));
 
 const jwt = require('jsonwebtoken');
@@ -931,7 +847,7 @@ app.put('/user/profile/update', verifyToken, upload.single('avatar'), async (req
           }
         }
       }
-      userToUpdate.avatar = req.file.filename;
+      userToUpdate.avatar = req.file.path;
     }
 
     const updatedUser = await userToUpdate.save();
@@ -1271,6 +1187,11 @@ app.post("/receive-hook", async (req, res) => {
       updated_at: new Date()
     });
 
+    // Tạo thông báo cho đơn hàng đã thanh toán
+    if (orderData.user_id) {
+      await createOrderNotification(orderData.user_id, newOrder._id, 'paid', newOrder.orderCode);
+    }
+
     if (orderData.voucher_id && orderData.user_id) {
        await VoucherUserModel.updateOne({ voucher_id: orderData.voucher_id, user_id: orderData.user_id }, { $set: { used: true } });
     }
@@ -1355,6 +1276,11 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
       created_at: new Date(),
       updated_at: new Date()
     });
+
+    // Tạo thông báo cho đơn hàng pending
+    if (user_id) {
+      await createOrderNotification(user_id, newOrder._id, 'pending', newOrder.orderCode);
+    }
 
     if (voucher_id && user_id) {
       await VoucherUserModel.updateOne({ voucher_id, user_id }, { $set: { used: true } });
@@ -2274,7 +2200,10 @@ app.delete('/user/addresses/:id', verifyToken, async (req, res) => {
 
   app.get('/api/search', async (req, res) => {
     try {
-      const { q, brand, category, priceRange, sortBy } = req.query;
+      const { q, brand, category, priceRange, sortBy, page, limit } = req.query;
+      const currentPage = parseInt(page) || 1;
+      const itemsPerPage = parseInt(limit) || 10;
+      const skip = (currentPage - 1) * itemsPerPage;
       
       let matchQuery = {};
 
@@ -2348,7 +2277,6 @@ app.delete('/user/addresses/:id', verifyToken, async (req, res) => {
         { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
         { $match: matchQuery },
         { $sort: sort },
-        { $limit: 50 },
         {
           $lookup: {
             from: 'product_images',
@@ -2408,9 +2336,28 @@ app.delete('/user/addresses/:id', verifyToken, async (req, res) => {
           { $replaceRoot: { newRoot: '$doc' } },
       ];
 
-      const products = await ProductModel.aggregate(aggregationPipeline);
+      // Tạo pipeline để đếm tổng số sản phẩm
+      const countPipeline = [...aggregationPipeline];
+      countPipeline.push({ $count: "total" });
 
-      res.json({ products });
+      // Thêm pagination vào pipeline chính
+      aggregationPipeline.push({ $skip: skip });
+      aggregationPipeline.push({ $limit: itemsPerPage });
+
+      const [products, countResult] = await Promise.all([
+        ProductModel.aggregate(aggregationPipeline),
+        ProductModel.aggregate(countPipeline)
+      ]);
+
+      const total = countResult[0]?.total || 0;
+
+      res.json({ 
+        products,
+        total,
+        currentPage,
+        totalPages: Math.ceil(total / itemsPerPage),
+        itemsPerPage
+      });
     } catch (error) {
       console.error('Lỗi tìm kiếm:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -3268,7 +3215,7 @@ app.post(
   async function (req, res) {
     try {
       const { name, alt, category_status } = req.body;
-      const image = req.file ? `${req.file.filename}` : null;
+      const image = req.file ? `${req.file.path}` : null;
 
       if (!name || typeof name !== 'string' || !name.trim()) {
         return res.status(400).json({ error: "Tên danh mục không được để trống!" });
@@ -3311,7 +3258,7 @@ app.put(
   async function (req, res) {
     const id = req.params.id;
     const { name, alt, category_status } = req.body;
-    const image = req.file ? `${req.file.filename}` : req.body.image_cu;
+    const image = req.file ? `${req.file.path}` : req.body.image_cu;
 
     try {
       const updatedLoai = await CategoryModel.findByIdAndUpdate(
@@ -3592,7 +3539,7 @@ app.post(
         const main = req.files["main_image"][0];
         await ProductImageModel.create({
           product_id: productId,
-          image: main.filename,
+          image: main.path,
           is_main: true,
           created_at: new Date(),
           updated_at: new Date(),
@@ -3603,7 +3550,7 @@ app.post(
         const subImgs = req.files["sub_images"];
         const subDocs = subImgs.map((img) => ({
           product_id: productId,
-          image: img.filename,
+          image: img.path,
           is_main: false,
           created_at: new Date(),
           updated_at: new Date(),
@@ -3711,7 +3658,7 @@ app.put(
         const mainImg = req.files["main_image"][0];
         await ProductImageModel.create({
           product_id: productId,
-          image: mainImg.filename,
+          image: mainImg.path,
           is_main: true,
           created_at: new Date(),
           updated_at: new Date(),
@@ -3727,7 +3674,7 @@ app.put(
         const subImgs = req.files["sub_images"];
         const subDocs = subImgs.map((img) => ({
           product_id: productId,
-          image: img.filename,
+          image: img.path,
           is_main: false,
           created_at: new Date(),
           updated_at: new Date(),
@@ -4119,7 +4066,7 @@ app.put(
             }
           }
 
-          updateData.avatar = req.file.filename;
+          updateData.avatar = req.file.path;
 
         } catch (error) {
           console.error("Lỗi xử lý tải ảnh:", error);
@@ -4563,6 +4510,28 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
     );
 
     if (updated) {
+      // Tạo thông báo khi cập nhật trạng thái đơn hàng
+      if (order_status && updated.user_id) {
+        const statusNotificationMapping = {
+          'choXuLy': 'pending',
+          'dangXuLy': 'processing', 
+          'dangGiaoHang': 'shipping',
+          'daGiaoHang': 'delivered',
+          'daHuy': 'cancelled'
+        };
+
+        const notificationStatus = statusNotificationMapping[order_status];
+        if (notificationStatus) {
+          // Tạo thông báo cho trạng thái tương ứng
+          await createOrderNotification(
+            updated.user_id, 
+            updated._id, 
+            notificationStatus, 
+            updated.orderCode || `ORDER-${updated._id.toString().slice(-6).toUpperCase()}`
+          );
+        }
+      }
+
       res.json({
         message: "Cập nhật trạng thái đơn hàng thành công!",
         order: updated,
@@ -4663,7 +4632,7 @@ app.post(
     try {
       const { title, content, categorynews_id, news_status } = req.body;
 
-      const image = req.file ? req.file.filename : null;
+      const image = req.file ? req.file.path : null;
 
       const newTin = await NewsModel.create({
         title,
@@ -4695,7 +4664,7 @@ app.put(
     const id = req.params.id;
     const { title, content, categorynews_id, news_status } = req.body;
 
-    const image = req.file ? req.file.filename : null;
+    const image = req.file ? req.file.path : null;
 
     try {
       const updateData = {
@@ -5123,7 +5092,7 @@ app.post(
   async function (req, res) {
     try {
       const { name, alt, brand_status, description } = req.body;
-      const image = req.file ? `${req.file.filename}` : null;
+      const image = req.file ? `${req.file.path}` : null;
 
       if (!name || typeof name !== 'string' || !name.trim()) {
         return res.status(400).json({ error: "Tên thương hiệu không được để trống!" });
@@ -5167,7 +5136,7 @@ app.put(
   async function (req, res) {
     const id = req.params.id;
     const { name, alt, brand_status, description } = req.body;
-    const image = req.file ? `${req.file.filename}` : req.body.image_cu;
+    const image = req.file ? `${req.file.path}` : req.body.image_cu;
 
     try {
       const updatedBrand = await BrandModel.findByIdAndUpdate(
@@ -5428,7 +5397,7 @@ app.post(
   async (req, res) => {
     const { name, code, description, is_active } = req.body;
 
-    const icon_url = req.file ? req.file.filename : null;
+    const icon_url = req.file ? req.file.path : null;
 
     const existingProduct = await PaymentMethodModel.findOne({
       name: name.trim(),
@@ -5465,7 +5434,7 @@ app.put(
     const id = req.params.id;
     const { name, code, description, is_active } = req.body;
 
-    const image = req.file ? req.file.filename : null;
+    const image = req.file ? req.file.path : null;
 
     try {
       const updatedPayment = {
@@ -5578,7 +5547,7 @@ app.put(
       let avatarPath = targetUser.avatar;
 
       if (req.file) {
-        avatarPath = `${req.file.filename}`;
+        avatarPath = `${req.file.path}`;
       } else if (avatar && avatar.trim()) {
         avatarPath = avatar.trim();
       }
@@ -5710,6 +5679,159 @@ app.get("/check-username", async (req, res) => {
   const user = await UserModel.findOne({ username });
   res.json({ exists: !!user });
 });
+
+// ==================== NOTIFICATION APIs ====================
+
+// Get user notifications
+app.get('/api/notifications', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const notifications = await NotificationModel.find({ userId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const unreadCount = await NotificationModel.countDocuments({ 
+      userId, 
+      isRead: false 
+    });
+
+    const total = await NotificationModel.countDocuments({ userId });
+
+    res.json({
+      notifications,
+      unreadCount,
+      total,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ error: 'Lỗi khi tải thông báo' });
+  }
+});
+
+// Mark notification as read
+app.put('/api/notifications/:id/read', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+
+    const notification = await NotificationModel.findOneAndUpdate(
+      { _id: id, userId },
+      { isRead: true, updatedAt: new Date() },
+      { new: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({ error: 'Không tìm thấy thông báo' });
+    }
+
+    res.json({ message: 'Đã đánh dấu thông báo đã đọc' });
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ error: 'Lỗi khi cập nhật thông báo' });
+  }
+});
+
+// Mark all notifications as read
+app.put('/api/notifications/mark-all-read', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    await NotificationModel.updateMany(
+      { userId, isRead: false },
+      { isRead: true, updatedAt: new Date() }
+    );
+
+    res.json({ message: 'Đã đánh dấu tất cả thông báo đã đọc' });
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+    res.status(500).json({ error: 'Lỗi khi cập nhật thông báo' });
+  }
+});
+
+// Create notification (for admin use)
+app.post('/api/notifications/create', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const { userId, title, message, type = 'system', orderId } = req.body;
+
+    if (!userId || !title || !message) {
+      return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
+    }
+
+    const notification = new NotificationModel({
+      userId,
+      title,
+      message,
+      type,
+      orderId: orderId || null
+    });
+
+    await notification.save();
+
+    res.json({ 
+      message: 'Tạo thông báo thành công',
+      notification 
+    });
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    res.status(500).json({ error: 'Lỗi khi tạo thông báo' });
+  }
+});
+
+// Function to create order status notification
+const createOrderNotification = async (userId, orderId, orderStatus, orderCode) => {
+  try {
+    let title, message;
+    
+    switch(orderStatus) {
+      case 'pending':
+        title = 'Đơn hàng đã được đặt thành công!';
+        message = `Đơn hàng #${orderCode} của bạn đã được đặt và đang chờ xác nhận. Chúng tôi sẽ liên hệ với bạn sớm nhất.`;
+        break;
+      case 'paid':
+        title = 'Đơn hàng đã được thanh toán!';
+        message = `Đơn hàng #${orderCode} đã được thanh toán thành công. Chúng tôi sẽ xử lý và giao hàng sớm nhất có thể.`;
+        break;
+      case 'processing':
+        title = 'Đơn hàng đã được xác nhận';
+        message = `Đơn hàng #${orderCode} đã được xác nhận và đang được chuẩn bị. Bạn có thể theo dõi tiến độ trong tài khoản.`;
+        break;
+      case 'shipping':
+        title = 'Đơn hàng đang được giao';
+        message = `Đơn hàng #${orderCode} đang trên đường giao đến bạn. Vui lòng chú ý điện thoại để nhận hàng.`;
+        break;
+      case 'delivered':
+        title = 'Đơn hàng đã được giao thành công';
+        message = `Đơn hàng #${orderCode} đã được giao thành công. Cảm ơn bạn đã mua sắm tại VClock!`;
+        break;
+      case 'cancelled':
+        title = 'Đơn hàng đã bị hủy';
+        message = `Đơn hàng #${orderCode} đã bị hủy. Nếu có thắc mắc, vui lòng liên hệ hotline để được hỗ trợ.`;
+        break;
+      default:
+        return;
+    }
+
+    const notification = new NotificationModel({
+      userId,
+      title,
+      message,
+      type: 'order',
+      orderId
+    });
+
+    await notification.save();
+  } catch (error) {
+    console.error('Error creating order notification:', error);
+  }
+};
 
 server.listen(port, () => {
   
