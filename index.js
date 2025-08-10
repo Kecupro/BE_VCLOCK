@@ -5195,6 +5195,8 @@ app.delete("/api/admin/brand/xoa/:id", async (req, res) => {
   }
 });
 
+
+
 app.get("/api/admin/review", async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
@@ -5206,107 +5208,32 @@ app.get("/api/admin/review", async (req, res) => {
   const sortOrder = req.query.sortOrder || "desc";
 
   try {
-    let matchQuery = {};
+    let filterQuery = {};
+    
     if (ratingFilter != "all") {
-      matchQuery.rating = parseInt(ratingFilter);
+      filterQuery.rating = parseInt(ratingFilter);
     }
 
-    const pipeline = [
-      {
-        $lookup: {
-          from: "users",
-          localField: "user_id",
-          foreignField: "_id",
-          as: "user_id",
-          pipeline: [{ $project: { username: 1, fullName: 1 } }],
-        },
-      },
-      { $unwind: { path: "$user_id", preserveNullAndEmptyArrays: true } },
+    if (search) {
+      filterQuery.comment = { $regex: search, $options: "i" };
+    }
 
-      {
-        $lookup: {
-          from: "order_details",
-          localField: "order_detail_id",
-          foreignField: "_id",
-          as: "order_detail_id",
-          pipeline: [
-            {
-              $lookup: {
-                from: "products",
-                localField: "product_id",
-                foreignField: "_id",
-                as: "product_id",
-                pipeline: [{ $project: { name: 1 } }],
-              },
-            },
-            { $unwind: "$product_id" },
-            { $project: { product_id: 1 } },
-          ],
-        },
-      },
-      {
-        $unwind: { path: "$order_detail_id", preserveNullAndEmptyArrays: true },
-      },
-
-      { $match: matchQuery },
-
-      ...(search
-        ? [
-            {
-              $match: {
-                $or: [
-                  { comment: { $regex: search, $options: "i" } },
-                  {
-                    "order_detail_id.product_id.name": {
-                      $regex: search,
-                      $options: "i",
-                    },
-                  },
-                  { "user_id.username": { $regex: search, $options: "i" } },
-                ],
-              },
-            },
-          ]
-        : []),
-
-      {
-        $sort: {
-          [sortBy]: sortOrder == "desc" ? -1 : 1,
-        },
-      },
-    ];
-
-    const countPipeline = [...pipeline, { $count: "total" }];
-    const countResult = await ReviewModel.aggregate(countPipeline);
-    const total = countResult.length > 0 ? countResult[0].total : 0;
-    const dataPipeline = [...pipeline, { $skip: skip }, { $limit: limit }];
-
-    const list = await ReviewModel.aggregate(dataPipeline);
-
-    const populatedList = await Promise.all(
-      list.map(async (review) => {
-        const productId = review?.order_detail_id?.product_id?._id;
-        let main_image = null;
-
-        if (productId) {
-          main_image = await ProductImageModel.findOne({
-            product_id: productId,
-            is_main: true,
-          }).select("image alt is_main");
+    const total = await ReviewModel.countDocuments(filterQuery);
+    
+    const list = await ReviewModel.find(filterQuery)
+      .sort({ [sortBy]: sortOrder == "desc" ? -1 : 1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('user_id', 'username fullName')
+      .populate({
+        path: 'order_detail_id',
+        populate: {
+          path: 'product_id',
+          select: 'name'
         }
+      });
 
-        return {
-          ...review,
-          order_detail_id: {
-            ...review.order_detail_id,
-            product_id: {
-              ...review.order_detail_id.product_id,
-              main_image,
-            },
-          },
-        };
-      })
-    );
+    const populatedList = list.map(review => review.toObject());
 
     res.json({
       list: populatedList,
@@ -5317,6 +5244,7 @@ app.get("/api/admin/review", async (req, res) => {
       hasPrevPage: page > 1,
     });
   } catch (error) {
+    console.error("Lỗi trong API /api/admin/review:", error);
     res.status(500).json({ error: "Lỗi khi lấy danh sách đánh giá." });
   }
 });
