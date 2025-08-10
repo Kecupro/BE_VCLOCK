@@ -4258,11 +4258,11 @@ app.get("/api/admin/order", async (req, res) => {
   let sortQuery = {};
 
   if (statusFilter && statusFilter != "all") {
-    query.order_status = statusFilter;
+    query.order_status = statusMapping[statusFilter] || statusFilter;
   }
 
   if (paymentStatusFilter && paymentStatusFilter != "all") {
-    query.payment_status = paymentStatusFilter;
+    query.payment_status = paymentStatusMapping[paymentStatusFilter] || paymentStatusFilter;
   }
 
   switch (sortOption) {
@@ -4367,29 +4367,37 @@ app.get("/api/admin/order", async (req, res) => {
       order.details = populatedDetails;
     }
 
-    const reverseStatusMapping = Object.fromEntries(
-      Object.entries(statusMapping).map(([key, value]) => [value, key])
-    );
+    const reverseStatusMapping = {
+      'pending': 'choXuLy',
+      'processing': 'dangXuLy',
+      'shipping': 'dangGiaoHang',
+      'delivered': 'daGiaoHang',
+      'cancelled': 'daHuy',
+      'returned': 'hoanTra',
+      'completed': 'hoanThanh'
+    };
 
-    const reversePaymentStatusMapping = Object.fromEntries(
-      Object.entries(paymentStatusMapping).map(([key, value]) => [value, key])
-    );
+    const reversePaymentStatusMapping = {
+      'unpaid': 'chuaThanhToan',
+      'paid': 'thanhToan',
+      'refunding': 'choHoanTien',
+      'refunded': 'hoanTien'
+    };
 
+    // Convert backend status to frontend status for list
     for (const order of list) {
-
       if (order.order_status && reverseStatusMapping[order.order_status]) {
-
         order.order_status = reverseStatusMapping[order.order_status];
       }
-
       if (order.payment_status && reversePaymentStatusMapping[order.payment_status]) {
-
         order.payment_status = reversePaymentStatusMapping[order.payment_status];
       }
     }
 
+    // Get all orders for counting
     const allOrders = await OrderModel.find({}).lean();
 
+    // Convert backend status to frontend status for all orders
     for (const order of allOrders) {
       if (order.order_status && reverseStatusMapping[order.order_status]) {
         order.order_status = reverseStatusMapping[order.order_status];
@@ -4401,14 +4409,16 @@ app.get("/api/admin/order", async (req, res) => {
 
     const countByStatus = (orders) => {
       return orders.reduce((acc, order) => {
-        acc[order.order_status] = (acc[order.order_status] || 0) + 1;
+        const frontendStatus = reverseStatusMapping[order.order_status] || order.order_status;
+        acc[frontendStatus] = (acc[frontendStatus] || 0) + 1;
         return acc;
       }, {});
     };
 
     const countByPaymentStatus = (orders) => {
       return orders.reduce((acc, order) => {
-        acc[order.payment_status] = (acc[order.payment_status] || 0) + 1;
+        const frontendPaymentStatus = reversePaymentStatusMapping[order.payment_status] || order.payment_status;
+        acc[frontendPaymentStatus] = (acc[frontendPaymentStatus] || 0) + 1;
         return acc;
       }, {});
     };
