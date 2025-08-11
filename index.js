@@ -1100,6 +1100,50 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
     const { orderData, amount, description, orderCode } = req.body;
     const user_id = req.user?.userId || null;
 
+    // Kiểm tra tồn kho trước khi tạo payment link
+    if (orderData.cart && orderData.cart.length > 0) {
+      const stockCheckPromises = orderData.cart.map(async (item) => {
+        const product = await ProductModel.findById(item._id).select('name quantity');
+        if (!product) {
+          return { 
+            productId: item._id, 
+            error: true, 
+            message: `Sản phẩm không tồn tại` 
+          };
+        }
+        
+        if (product.quantity < item.so_luong) {
+          return { 
+            productId: item._id, 
+            productName: product.name,
+            error: true, 
+            message: `Chỉ còn ${product.quantity} sản phẩm "${product.name}" trong kho`,
+            availableQuantity: product.quantity,
+            requestedQuantity: item.so_luong
+          };
+        }
+        
+        return { 
+          productId: item._id, 
+          productName: product.name,
+          error: false, 
+          availableQuantity: product.quantity 
+        };
+      });
+
+      const stockCheckResults = await Promise.all(stockCheckPromises);
+      const stockErrors = stockCheckResults.filter(result => result.error);
+
+      if (stockErrors.length > 0) {
+        const errorMessages = stockErrors.map(error => error.message);
+        return res.status(400).json({ 
+          message: "Một số sản phẩm không đủ tồn kho", 
+          errors: stockErrors,
+          details: errorMessages.join(', ')
+        });
+      }
+    }
+
     const fullOrderData = {
       ...orderData,
       user_id 
@@ -1204,6 +1248,17 @@ app.post("/receive-hook", async (req, res) => {
     }));
 
     await OrderDetailModel.insertMany(items);
+
+    // Cập nhật tồn kho sau khi thanh toán thành công
+    const stockUpdatePromises = orderData.cart.map(async (item) => {
+      await ProductModel.findByIdAndUpdate(
+        item._id,
+        { $inc: { quantity: -item.so_luong } }
+      );
+    });
+
+    await Promise.all(stockUpdatePromises);
+    
     res.status(200).json({ message: "Tạo đơn hàng thành công" });
   } catch (err) {
     console.error("❌ Lỗi xử lý webhook:", err);
@@ -1238,6 +1293,48 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
 
     if (!payment_method_id || !total_amount) {
       return res.status(400).json({ message: "Thiếu phương thức thanh toán hoặc tổng tiền." });
+    }
+
+    // Kiểm tra tồn kho cho tất cả sản phẩm trong giỏ hàng
+    const stockCheckPromises = cart.map(async (item) => {
+      const product = await ProductModel.findById(item._id).select('name quantity');
+      if (!product) {
+        return { 
+          productId: item._id, 
+          error: true, 
+          message: `Sản phẩm không tồn tại` 
+        };
+      }
+      
+      if (product.quantity < item.so_luong) {
+        return { 
+          productId: item._id, 
+          productName: product.name,
+          error: true, 
+          message: `Chỉ còn ${product.quantity} sản phẩm "${product.name}" trong kho`,
+          availableQuantity: product.quantity,
+          requestedQuantity: item.so_luong
+        };
+      }
+      
+      return { 
+        productId: item._id, 
+        productName: product.name,
+        error: false, 
+        availableQuantity: product.quantity 
+      };
+    });
+
+    const stockCheckResults = await Promise.all(stockCheckPromises);
+    const stockErrors = stockCheckResults.filter(result => result.error);
+
+    if (stockErrors.length > 0) {
+      const errorMessages = stockErrors.map(error => error.message);
+      return res.status(400).json({ 
+        message: "Một số sản phẩm không đủ tồn kho", 
+        errors: stockErrors,
+        details: errorMessages.join(', ')
+      });
     }
 
     let finalAddressId = address_id;
@@ -1294,6 +1391,16 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
 
     await OrderDetailModel.insertMany(orderItems);
 
+    // Cập nhật tồn kho sau khi đặt hàng thành công
+    const stockUpdatePromises = cart.map(async (item) => {
+      await ProductModel.findByIdAndUpdate(
+        item._id,
+        { $inc: { quantity: -item.so_luong } }
+      );
+    });
+
+    await Promise.all(stockUpdatePromises);
+
     return res.status(200).json({ message: "Đặt hàng thành công", order_id: newOrder._id });
   } catch (err) {
     console.error("Lỗi khi tạo đơn hàng:", err);
@@ -1341,6 +1448,36 @@ app.post('/checkout/addresses', verifyOptionalToken, async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
+// API để lấy thông tin tồn kho real-time
+app.get('/api/products/stock-info', async (req, res) => {
+  try {
+    const { productIds } = req.query;
+    
+    if (!productIds) {
+      return res.status(400).json({ message: "Thiếu productIds" });
+    }
+
+    const ids = Array.isArray(productIds) ? productIds : [productIds];
+    const products = await ProductModel.find(
+      { _id: { $in: ids } },
+      { _id: 1, name: 1, quantity: 1 }
+    );
+
+    const stockInfo = products.reduce((acc, product) => {
+      acc[product._id.toString()] = {
+        name: product.name,
+        quantity: product.quantity
+      };
+      return acc;
+    }, {});
+
+    res.json({ stockInfo });
+  } catch (err) {
+    console.error("Lỗi khi lấy thông tin tồn kho:", err);
+    res.status(500).json({ message: "Lỗi server" });
   }
 });
 
@@ -1473,14 +1610,44 @@ app.get('/api/product/:id', async (req, res) => {
     const productData = product[0];
     const slug = slugify(productData.name, { lower: true, locale: 'vi' });
 
-    await ProductModel.updateOne({ _id: objectId }, { $inc: { views: 1 } });
-
     res.json({
       ...productData,
       slug: `${slug}-${productData._id}`,
     });    
   } catch (err) {
     res.status(500).json({ error: 'Lỗi máy chủ', details: err.message });
+  }
+});
+
+// API để tăng lượt xem sản phẩm
+app.post('/api/product/:id/increment-view', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID không hợp lệ' });
+    }
+
+    const objectId = new ObjectId(id);
+    
+    const product = await ProductModel.findById(objectId);
+    if (!product) {
+      return res.status(404).json({ error: 'Không tìm thấy sản phẩm' });
+    }
+
+    const result = await ProductModel.findByIdAndUpdate(
+      objectId,
+      { $inc: { views: 1 } },
+      { new: true }
+    );
+
+    res.json({ 
+      success: true,
+      message: 'Đã tăng lượt xem',
+      views: result.views 
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Lỗi tăng lượt xem', details: err.message });
   }
 });
 
@@ -1568,6 +1735,7 @@ app.get('/api/products/top-rated', async function(req, res) {
             name: 1,
             price: 1,
             sale_price: 1,
+            quantity: 1,
             averageRating: { $round: ['$averageRating', 1] },
             reviewCount: 1,
             main_image: 1,
@@ -2371,6 +2539,7 @@ app.get('/api/news', async (req, res) => {
     const skip = (page - 1) * limit;
 
     const news = await NewsModel.aggregate([
+      { $match: { news_status: 0 } }, // Chỉ lấy tin tức công khai
       {
         $lookup: {
           from: 'category_news',
@@ -2398,7 +2567,7 @@ app.get('/api/news', async (req, res) => {
       { $limit: limit }
     ]);
 
-    const total = await NewsModel.countDocuments();
+    const total = await NewsModel.countDocuments({ news_status: 0 }); // Đếm chỉ tin tức công khai
 
     res.json({
       news,
@@ -2415,7 +2584,7 @@ app.get('/api/news/:id', async (req, res) => {
   try {
     const newsId = new ObjectId(req.params.id);
     const news = await NewsModel.aggregate([
-      { $match: { _id: newsId } },
+      { $match: { _id: newsId, news_status: 0 } }, // Chỉ lấy tin tức công khai
       {
         $lookup: {
           from: 'category_news',
@@ -2483,7 +2652,7 @@ app.get('/api/news/category/:categoryId', async (req, res) => {
     const skip = (page - 1) * limit;
 
     const news = await NewsModel.aggregate([
-      { $match: { categorynews_id: categoryId } },
+      { $match: { categorynews_id: categoryId, news_status: 0 } }, // Chỉ lấy tin tức công khai
       {
         $lookup: {
           from: 'category_news',
@@ -2511,7 +2680,7 @@ app.get('/api/news/category/:categoryId', async (req, res) => {
       { $limit: limit }
     ]);
 
-    const total = await NewsModel.countDocuments({ categorynews_id: categoryId });
+    const total = await NewsModel.countDocuments({ categorynews_id: categoryId, news_status: 0 }); // Đếm chỉ tin tức công khai
 
     res.json({
       news,
@@ -2542,9 +2711,13 @@ app.get('/user/wishlist', verifyToken, async (req, res) => {
           .sort({ created_at: -1 });
 
       const result = await Promise.all(wishlistItems.map(async item => {
+          // Kiểm tra nếu product_id là null (sản phẩm đã bị xóa)
+          if (!item.product_id) {
+              return null;
+          }
+          
           let main_image = item.product_id.main_image;
           if (!main_image) {
-
               const img = await ProductImageModel.findOne({ product_id: item.product_id._id, is_main: true });
               main_image = img ? img.image : '';
           }
@@ -2564,7 +2737,23 @@ app.get('/user/wishlist', verifyToken, async (req, res) => {
           };
       }));
 
-      res.json(result);
+      // Lọc bỏ các item null (sản phẩm đã bị xóa)
+      const filteredResult = result.filter(item => item !== null);
+      
+      // Tự động xóa các wishlist item có sản phẩm đã bị xóa
+      const nullItems = result.filter(item => item === null);
+      if (nullItems.length > 0) {
+          const nullWishlistIds = wishlistItems
+              .filter((item, index) => result[index] === null)
+              .map(item => item._id);
+          
+          if (nullWishlistIds.length > 0) {
+              await WishlistModel.deleteMany({ _id: { $in: nullWishlistIds } });
+              console.log(`Đã xóa ${nullWishlistIds.length} wishlist item có sản phẩm đã bị xóa`);
+          }
+      }
+
+      res.json(filteredResult);
   } catch (error) {
       console.error('Lỗi lấy danh sách yêu thích:', error);
       res.status(500).json({ message: 'Lỗi khi lấy danh sách yêu thích' });
@@ -2745,6 +2934,26 @@ app.put("/api/cancel-order/:order_id", async (req, res) => {
     order.updated_at = new Date();
     await order.save();
 
+    // Cập nhật lại số lượng tồn kho khi hủy đơn hàng
+    try {
+      // Lấy chi tiết đơn hàng
+      const orderDetails = await OrderDetailModel.find({ order_id: order_id });
+      
+      // Cập nhật số lượng tồn kho cho từng sản phẩm
+      for (const detail of orderDetails) {
+        await ProductModel.findByIdAndUpdate(
+          detail.product_id,
+          { $inc: { quantity: detail.quantity } },
+          { new: true }
+        );
+      }
+      
+      console.log(`Đã cập nhật lại tồn kho cho đơn hàng ${order_id}`);
+    } catch (stockError) {
+      console.error('Lỗi khi cập nhật tồn kho:', stockError);
+      // Không trả về lỗi cho người dùng vì đơn hàng đã được hủy thành công
+    }
+
     res.json({ message: "Đơn hàng đã được hủy thành công." });
   } catch (error) {
     console.error("Lỗi khi hủy đơn hàng:", error);
@@ -2777,12 +2986,34 @@ app.put("/api/return-order/:order_id", async (req, res) => {
     order.note = (order.note || "") + `\nTrả hàng: ${reason}`;
     await order.save();
 
+    // Cập nhật lại số lượng tồn kho khi trả hàng
+    try {
+      // Lấy chi tiết đơn hàng
+      const orderDetails = await OrderDetailModel.find({ order_id: order_id });
+      
+      // Cập nhật số lượng tồn kho cho từng sản phẩm
+      for (const detail of orderDetails) {
+        await ProductModel.findByIdAndUpdate(
+          detail.product_id,
+          { $inc: { quantity: detail.quantity } },
+          { new: true }
+        );
+      }
+      
+      console.log(`Đã cập nhật lại tồn kho cho đơn hàng trả ${order_id}`);
+    } catch (stockError) {
+      console.error('Lỗi khi cập nhật tồn kho:', stockError);
+      // Không trả về lỗi cho người dùng vì đơn hàng đã được trả thành công
+    }
+
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error("Lỗi khi xử lý trả hàng:", err);
     return res.status(500).json({ error: "Có lỗi xảy ra, thử lại sau" });
   }
 });
+
+
 
 app.get("/reviews/user", verifyToken, async (req, res) => {
   const userId = req.user.userId;
@@ -4520,6 +4751,28 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
     );
 
     if (updated) {
+      // Cập nhật lại số lượng tồn kho khi hủy đơn hàng
+      if (order_status === 'daHuy') {
+        try {
+          // Lấy chi tiết đơn hàng
+          const orderDetails = await OrderDetailModel.find({ order_id: id });
+          
+          // Cập nhật số lượng tồn kho cho từng sản phẩm
+          for (const detail of orderDetails) {
+            await ProductModel.findByIdAndUpdate(
+              detail.product_id,
+              { $inc: { quantity: detail.quantity } },
+              { new: true }
+            );
+          }
+          
+          console.log(`Đã cập nhật lại tồn kho cho đơn hàng ${id}`);
+        } catch (stockError) {
+          console.error('Lỗi khi cập nhật tồn kho:', stockError);
+          // Không trả về lỗi cho người dùng vì đơn hàng đã được hủy thành công
+        }
+      }
+
       // Tạo thông báo khi cập nhật trạng thái đơn hàng
       if (order_status && updated.user_id) {
         const statusNotificationMapping = {
