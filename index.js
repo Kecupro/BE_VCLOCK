@@ -549,7 +549,7 @@ app.use('/images', exp.static(path.join(__dirname, '..', 'duantn', 'public', 'im
 const jwt = require('jsonwebtoken');
 const User = mongoose.model('User', userSchema);
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
 const verifyToken = (req, res, next) => {
   const token = req.headers['authorization']?.split(' ')[1];
@@ -754,7 +754,7 @@ app.post('/login', async (req, res) => {
     const token = jwt.sign(
       { userId: user._id, username: user.username, role: user.role },
       JWT_SECRET,
-      { expiresIn: '2d' }
+      { expiresIn: '24h' }
     );
 
     const { password_hash: _, ...userWithoutPassword } = user.toObject();
@@ -767,6 +767,31 @@ app.post('/login', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
+// Refresh token endpoint
+app.post('/refresh-token', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user || user.account_status !== '1') {
+      return res.status(401).json({ message: 'Tài khoản không hợp lệ' });
+    }
+    
+    const newToken = jwt.sign(
+      { userId: user._id, username: user.username, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    const { password_hash: _, ...userWithoutPassword } = user.toObject();
+    
+    res.json({ 
+      token: newToken, 
+      user: userWithoutPassword
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi refresh token' });
   }
 });
 
@@ -1159,7 +1184,7 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
     const numericOrderCode = parseInt(orderCodeStr.replace(/\D/g, '')) || Date.now();
     
     const order = {
-      amount: 2000,
+      amount:  2000, // Sử dụng amount thực tế
       description: description || `Thanh toán đơn hàng ${orderCode}`,
       orderCode: numericOrderCode,
       returnUrl: `${process.env.CORS_ORIGIN?.split(',')[0]}/checkout-success`,
@@ -1167,7 +1192,6 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
     };
 
     if (!client_id || !api_key || !checksum_key) {
-  
       return res.json({ 
         checkoutUrl: `${process.env.CORS_ORIGIN?.split(',')[0]}/checkout-success?orderCode=${orderCode}&status=success` 
       });
@@ -1186,6 +1210,137 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
   }
 });
 
+// API để kiểm tra trạng thái đơn hàng theo orderCode
+app.get("/api/order-status/:orderCode", async (req, res) => {
+  try {
+    const { orderCode } = req.params;
+
+    // Kiểm tra temp order
+    const tempOrder = await TempOrderModel.findOne({ orderCode });
+    
+    // Kiểm tra đơn hàng thật
+    const realOrder = await OrderModel.findOne({ orderCode });
+
+    const result = {
+      orderCode,
+      hasTempOrder: !!tempOrder,
+      hasRealOrder: !!realOrder,
+      tempOrder: tempOrder ? {
+        id: tempOrder._id,
+        created_at: tempOrder.created_at,
+        orderData: tempOrder.orderData
+      } : null,
+      realOrder: realOrder ? {
+        id: realOrder._id,
+        order_status: realOrder.order_status,
+        created_at: realOrder.created_at,
+        total_amount: realOrder.total_amount
+      } : null
+    };
+
+    res.json(result);
+  } catch (err) {
+    console.error("Lỗi kiểm tra trạng thái đơn hàng:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+});
+
+// API để xử lý thanh toán thành công từ frontend (fallback)
+app.post("/api/payment-success", verifyOptionalToken, async (req, res) => {
+  try {
+    const { orderCode } = req.body;
+    const user_id = req.user?.userId || null;
+
+    if (!orderCode) {
+      return res.status(400).json({ message: "Thiếu orderCode" });
+    }
+
+    // Kiểm tra xem đơn hàng đã được xử lý chưa
+    const existingOrder = await OrderModel.findOne({ orderCode });
+    if (existingOrder) {
+      return res.json({ 
+        message: "Đơn hàng đã được xử lý", 
+        order_id: existingOrder._id,
+        order_status: existingOrder.order_status
+      });
+    }
+
+    // Tìm temp order
+    let temp = await TempOrderModel.findOne({ orderCode });
+    if (!temp) {
+      return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
+    }
+
+    // Xử lý tương tự như webhook
+    const orderData = temp.orderData;
+    let finalAddressId = orderData.address_id;
+
+    if (!orderData.address_id && orderData.new_address) {
+      const addr = await AddressModel.create({
+        ...orderData.new_address,
+        user_id: orderData.user_id || null,
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+      finalAddressId = addr._id;
+    }
+
+    const newOrder = await OrderModel.create({
+      user_id: orderData.user_id || null,
+      orderCode,
+      voucher_id: orderData.voucher_id || null,
+      address_id: finalAddressId,
+      payment_method_id: orderData.payment_method_id,
+      shipping_fee: 0,
+      note: orderData.note || "",
+      total_amount: orderData.total_amount,
+      discount_amount: orderData.discount_amount || 0,
+      order_status: "processing",
+      payment_status: "paid",
+      created_at: new Date(),
+      updated_at: new Date()
+    });
+
+    if (orderData.user_id) {
+      await createOrderNotification(orderData.user_id, newOrder._id, 'processing', newOrder.orderCode);
+    }
+
+    if (orderData.voucher_id && orderData.user_id) {
+      await VoucherUserModel.updateOne({ voucher_id: orderData.voucher_id, user_id: orderData.user_id }, { $set: { used: true } });
+    }
+
+    const items = orderData.cart.map(i => ({
+      order_id: newOrder._id,
+      product_id: i._id,
+      quantity: i.so_luong,
+      price: i.sale_price > 0 ? i.sale_price : i.price
+    }));
+
+    await OrderDetailModel.insertMany(items);
+
+    // Cập nhật tồn kho
+    const stockUpdatePromises = orderData.cart.map(async (item) => {
+      await ProductModel.findByIdAndUpdate(
+        item._id,
+        { $inc: { quantity: -item.so_luong } }
+      );
+    });
+
+    await Promise.all(stockUpdatePromises);
+
+    // Xóa temp order
+    await TempOrderModel.findByIdAndDelete(temp._id);
+
+    res.json({ 
+      message: "Xử lý thanh toán thành công", 
+      order_id: newOrder._id 
+    });
+  } catch (err) {
+    console.error("Lỗi xử lý payment success:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+});
+
 app.post("/receive-hook", async (req, res) => {
   const data = req.body?.data;
   const status = req.body?.code;
@@ -1195,13 +1350,35 @@ app.post("/receive-hook", async (req, res) => {
   }
 
   const orderCode = data?.orderCode;
+  const transactionId = data?.transactionId;
+
   if (!orderCode) {
     return res.status(400).json({ message: "Thiếu orderCode trong webhook" });
   }
 
+  
+
   try {
-    const temp = await TempOrderModel.findOne({ orderCode });
-    if (!temp) return res.status(404).json({ message: "Không tìm thấy đơn tạm" });
+    // Tìm temp order theo orderCode
+    let temp = await TempOrderModel.findOne({ orderCode });
+    
+    // Nếu không tìm thấy, thử tìm theo transactionId
+    if (!temp && transactionId) {
+      temp = await TempOrderModel.findOne({ 
+        "orderData.orderCode": transactionId 
+      });
+    }
+    
+    // Nếu vẫn không tìm thấy, thử tìm theo orderCode dạng string
+    if (!temp) {
+      temp = await TempOrderModel.findOne({ 
+        orderCode: String(orderCode) 
+      });
+    }
+
+    if (!temp) {
+      return res.status(404).json({ message: "Không tìm thấy đơn tạm" });
+    }
 
     const orderData = temp.orderData;
     let finalAddressId = orderData.address_id;
@@ -1226,18 +1403,19 @@ app.post("/receive-hook", async (req, res) => {
       note: orderData.note || "",
       total_amount: orderData.total_amount,
       discount_amount: orderData.discount_amount || 0,
-      order_status: "paid",
+      order_status: "processing",
+      payment_status: "paid",
       created_at: new Date(),
       updated_at: new Date()
     });
 
     // Tạo thông báo cho đơn hàng đã thanh toán
     if (orderData.user_id) {
-      await createOrderNotification(orderData.user_id, newOrder._id, 'paid', newOrder.orderCode);
+      await createOrderNotification(orderData.user_id, newOrder._id, 'processing', newOrder.orderCode);
     }
 
     if (orderData.voucher_id && orderData.user_id) {
-       await VoucherUserModel.updateOne({ voucher_id: orderData.voucher_id, user_id: orderData.user_id }, { $set: { used: true } });
+      await VoucherUserModel.updateOne({ voucher_id: orderData.voucher_id, user_id: orderData.user_id }, { $set: { used: true } });
     }
 
     const items = orderData.cart.map(i => ({
@@ -1258,10 +1436,13 @@ app.post("/receive-hook", async (req, res) => {
     });
 
     await Promise.all(stockUpdatePromises);
+
+    // Xóa temp order sau khi xử lý thành công
+    await TempOrderModel.findByIdAndDelete(temp._id);
     
     res.status(200).json({ message: "Tạo đơn hàng thành công" });
   } catch (err) {
-    console.error("❌ Lỗi xử lý webhook:", err);
+    console.error("Lỗi xử lý webhook:", err);
     res.status(500).json({ message: "Lỗi xử lý webhook" });
   }
 });
@@ -1359,6 +1540,10 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
       return res.status(400).json({ message: "Thiếu địa chỉ giao hàng." });
     }
 
+    // Kiểm tra payment method để xác định trạng thái thanh toán
+    const paymentMethod = await PaymentMethodModel.findById(payment_method_id);
+    const isCOD = paymentMethod?.code === 'COD';
+    
     const newOrder = await OrderModel.create({
       orderCode: orderCode || null,
       user_id: user_id || null,
@@ -1369,14 +1554,16 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
       note: note || "",
       total_amount: total_amount,
       discount_amount: discount_amount || 0,
-      order_status: "pending",
+      order_status: isCOD ? "pending" : "processing",
+      payment_status: isCOD ? "unpaid" : "paid",
       created_at: new Date(),
       updated_at: new Date()
     });
 
-    // Tạo thông báo cho đơn hàng pending
+    // Tạo thông báo cho đơn hàng
     if (user_id) {
-      await createOrderNotification(user_id, newOrder._id, 'pending', newOrder.orderCode);
+      const notificationStatus = isCOD ? 'pending' : 'processing';
+      await createOrderNotification(user_id, newOrder._id, notificationStatus, newOrder.orderCode);
     }
 
     if (voucher_id && user_id) {
@@ -2983,8 +3170,28 @@ app.put("/api/return-order/:order_id", async (req, res) => {
     }
 
     order.order_status = "returned";
+    
+    // Kiểm tra phương thức thanh toán để quyết định có hoàn tiền hay không
+    const paymentMethod = await PaymentMethodModel.findById(order.payment_method_id);
+    const isCOD = paymentMethod?.code === 'COD';
+    
+    // Chỉ chuyển sang chờ hoàn tiền nếu KHÔNG phải COD và đã thanh toán
+    if (!isCOD && order.payment_status === "paid") {
+      order.payment_status = "refunding";
+    }
     order.note = (order.note || "") + `\nTrả hàng: ${reason}`;
     await order.save();
+
+    // Tạo thông báo cho khách hàng
+    if (order.user_id) {
+      const notificationStatus = isCOD ? 'returned' : 'refunding';
+      await createOrderNotification(
+        order.user_id, 
+        order._id, 
+        notificationStatus, 
+        order.orderCode || `ORDER-${order._id.toString().slice(-6).toUpperCase()}`
+      );
+    }
 
     // Cập nhật lại số lượng tồn kho khi trả hàng
     try {
@@ -4773,16 +4980,22 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
         }
       }
 
+      // Định nghĩa mapping cho thông báo
+      const statusNotificationMapping = {
+        'choXuLy': 'pending',
+        'dangXuLy': 'processing', 
+        'dangGiaoHang': 'shipping',
+        'daGiaoHang': 'delivered',
+        'daHuy': 'cancelled'
+      };
+
+      const paymentStatusNotificationMapping = {
+        'choHoanTien': 'refunding',
+        'hoanTien': 'refunded'
+      };
+
       // Tạo thông báo khi cập nhật trạng thái đơn hàng
       if (order_status && updated.user_id) {
-        const statusNotificationMapping = {
-          'choXuLy': 'pending',
-          'dangXuLy': 'processing', 
-          'dangGiaoHang': 'shipping',
-          'daGiaoHang': 'delivered',
-          'daHuy': 'cancelled'
-        };
-
         const notificationStatus = statusNotificationMapping[order_status];
         if (notificationStatus) {
           // Tạo thông báo cho trạng thái tương ứng
@@ -4790,6 +5003,20 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
             updated.user_id, 
             updated._id, 
             notificationStatus, 
+            updated.orderCode || `ORDER-${updated._id.toString().slice(-6).toUpperCase()}`
+          );
+        }
+      }
+
+      // Tạo thông báo khi cập nhật trạng thái thanh toán
+      if (payment_status && updated.user_id) {
+        const paymentNotificationStatus = paymentStatusNotificationMapping[payment_status];
+        if (paymentNotificationStatus) {
+          // Tạo thông báo cho trạng thái thanh toán tương ứng
+          await createOrderNotification(
+            updated.user_id, 
+            updated._id, 
+            paymentNotificationStatus, 
             updated.orderCode || `ORDER-${updated._id.toString().slice(-6).toUpperCase()}`
           );
         }
@@ -6005,6 +6232,18 @@ const createOrderNotification = async (userId, orderId, orderStatus, orderCode) 
       case 'cancelled':
         title = 'Đơn hàng đã bị hủy';
         message = `Đơn hàng #${orderCode} đã bị hủy. Nếu có thắc mắc, vui lòng liên hệ hotline để được hỗ trợ.`;
+        break;
+      case 'returned':
+        title = 'Yêu cầu trả hàng đã được chấp nhận';
+        message = `Đơn hàng #${orderCode} đã được chấp nhận trả hàng. Chúng tôi sẽ xử lý trong thời gian sớm nhất.`;
+        break;
+      case 'refunding':
+        title = 'Yêu cầu hoàn tiền đã được xử lý';
+        message = `Đơn hàng #${orderCode} đã được chấp nhận trả hàng. Chúng tôi sẽ xử lý hoàn tiền trong thời gian sớm nhất.`;
+        break;
+      case 'refunded':
+        title = 'Hoàn tiền thành công';
+        message = `Đơn hàng #${orderCode} đã được hoàn tiền thành công. Số tiền sẽ được chuyển về tài khoản của bạn trong 3-5 ngày làm việc.`;
         break;
       default:
         return;
