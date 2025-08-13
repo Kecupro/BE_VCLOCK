@@ -6245,6 +6245,10 @@ const createOrderNotification = async (userId, orderId, orderStatus, orderCode) 
         title = 'Hoàn tiền thành công';
         message = `Đơn hàng #${orderCode} đã được hoàn tiền thành công. Số tiền sẽ được chuyển về tài khoản của bạn trong 3-5 ngày làm việc.`;
         break;
+      // case 'completed':
+      //   title = 'Đơn hàng đã hoàn thành';
+      //   message = `Đơn hàng #${orderCode} đã được hoàn thành. Cảm ơn bạn đã mua sắm tại VClock!`;
+      //   break;
       default:
         return;
     }
@@ -6263,6 +6267,46 @@ const createOrderNotification = async (userId, orderId, orderStatus, orderCode) 
   }
 };
 
+
+const autoCompleteOrders = async () => {
+  try {
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    const ordersToComplete = await OrderModel.find({
+      $or: [
+        { order_status: "delivered" },
+        { order_status: "daGiaoHang" }
+      ],
+      updated_at: { $lte: twoDaysAgo }
+    });
+
+    if (ordersToComplete.length > 0) {
+      for (const order of ordersToComplete) {
+        await OrderModel.findByIdAndUpdate(order._id, {
+          order_status: "completed",
+          updated_at: new Date()
+        });
+        if (order.user_id) {
+          await createOrderNotification(
+            order.user_id, 
+            order._id, 
+            'completed', 
+            order.orderCode || `ORDER-${order._id.toString().slice(-6).toUpperCase()}`
+          );
+        }
+      }
+    }
+  } catch (error) {
+    console.error(' Lỗi khi tự động chuyển trạng thái đơn hàng:', error);
+  }
+};
+
+
+
+setInterval(autoCompleteOrders, 300000);
+
+autoCompleteOrders();
+
 server.listen(port, () => {
-  
+  console.log(`🚀 Server đang chạy tại port ${port}`);
 });
