@@ -4,6 +4,7 @@ let voucherSchema = new mongoose.Schema(
     voucher_name: {
       type: String,
       required: true,
+      unique: true,
       trim: true,
     },
     voucher_code: {
@@ -39,12 +40,7 @@ let voucherSchema = new mongoose.Schema(
       default: null,
       min: 0,
     },
-    status: {
-      type: Number,
-      enum: [0, 1],
-      default: 0,
-      require: true,
-    },
+
     created_at: {
       type: Date,
       default: Date.now,

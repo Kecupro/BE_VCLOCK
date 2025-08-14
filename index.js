@@ -5417,10 +5417,21 @@ app.post("/api/admin/voucher/them", async (req, res) => {
     discount_value,
     minimum_order_value,
     max_discount,
-    status,
   } = req.body;
 
   try {
+    // Kiểm tra xem voucher_code đã tồn tại chưa
+    const existingVoucher = await VoucherModel.findOne({ voucher_code });
+    if (existingVoucher) {
+      return res.status(400).json({ error: "Mã khuyến mãi đã tồn tại!" });
+    }
+
+    // Kiểm tra xem voucher_name đã tồn tại chưa
+    const existingVoucherName = await VoucherModel.findOne({ voucher_name });
+    if (existingVoucherName) {
+      return res.status(400).json({ error: "Tên khuyến mãi đã tồn tại!" });
+    }
+
     const newVoucher = await VoucherModel.create({
       voucher_name,
       voucher_code,
@@ -5430,7 +5441,6 @@ app.post("/api/admin/voucher/them", async (req, res) => {
       discount_value,
       minimum_order_value: minimum_order_value || 0,
       max_discount: max_discount || 0,
-      status: status == undefined ? 0 : parseInt(status),
       created_at: new Date(),
       updated_at: new Date(),
     });
@@ -5440,7 +5450,26 @@ app.post("/api/admin/voucher/them", async (req, res) => {
       voucher: newVoucher,
     });
   } catch (error) {
-    res.status(500).json({ error: "Mã khuyến mãi đã tồn tại!" });
+    console.error("Lỗi khi thêm voucher:", error);
+    
+    // Xử lý các loại lỗi khác nhau
+    if (error.code === 11000) {
+      // Lỗi duplicate key từ MongoDB
+      const field = Object.keys(error.keyPattern)[0];
+      if (field === 'voucher_code') {
+        return res.status(400).json({ error: "Mã khuyến mãi đã tồn tại!" });
+      } else if (field === 'voucher_name') {
+        return res.status(400).json({ error: "Tên khuyến mãi đã tồn tại!" });
+      }
+    }
+    
+    // Lỗi validation
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    
+    res.status(500).json({ error: "Đã xảy ra lỗi khi thêm voucher. Vui lòng thử lại!" });
   }
 });
 
@@ -5455,10 +5484,33 @@ app.put("/api/admin/voucher/sua/:id", async (req, res) => {
     discount_value,
     minimum_order_value,
     max_discount,
-    status,
   } = req.body;
 
   try {
+    // Kiểm tra xem voucher có tồn tại không
+    const existingVoucher = await VoucherModel.findById(id);
+    if (!existingVoucher) {
+      return res.status(404).json({ error: "Không tìm thấy voucher với ID này." });
+    }
+
+    // Kiểm tra xem voucher_code đã tồn tại ở voucher khác chưa
+    const duplicateCode = await VoucherModel.findOne({ 
+      voucher_code, 
+      _id: { $ne: id } 
+    });
+    if (duplicateCode) {
+      return res.status(400).json({ error: "Mã khuyến mãi đã tồn tại!" });
+    }
+
+    // Kiểm tra xem voucher_name đã tồn tại ở voucher khác chưa
+    const duplicateName = await VoucherModel.findOne({ 
+      voucher_name, 
+      _id: { $ne: id } 
+    });
+    if (duplicateName) {
+      return res.status(400).json({ error: "Tên khuyến mãi đã tồn tại!" });
+    }
+
     const updated = await VoucherModel.findByIdAndUpdate(
       id,
       {
@@ -5469,23 +5521,37 @@ app.put("/api/admin/voucher/sua/:id", async (req, res) => {
         discount_type,
         discount_value,
         minimum_order_value: minimum_order_value || 0,
-        max_discount: max_discount || null,
-        status: status == undefined ? 0 : parseInt(status),
+        max_discount: max_discount || 0,
         updated_at: new Date(),
       },
       { new: true }
     );
 
-    if (updated) {
-      res.json({
-        message: "Cập nhật voucher thành công!",
-        voucher: updated,
-      });
-    } else {
-      res.status(404).json({ error: "Không tìm thấy voucher với ID này." });
-    }
+    res.json({
+      message: "Cập nhật voucher thành công!",
+      voucher: updated,
+    });
   } catch (error) {
-    res.status(500).json({ error: "Mã khuyến mãi đã tồn tại!" });
+    console.error("Lỗi khi cập nhật voucher:", error);
+    
+    // Xử lý các loại lỗi khác nhau
+    if (error.code === 11000) {
+      // Lỗi duplicate key từ MongoDB
+      const field = Object.keys(error.keyPattern)[0];
+      if (field === 'voucher_code') {
+        return res.status(400).json({ error: "Mã khuyến mãi đã tồn tại!" });
+      } else if (field === 'voucher_name') {
+        return res.status(400).json({ error: "Tên khuyến mãi đã tồn tại!" });
+      }
+    }
+    
+    // Lỗi validation
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    
+    res.status(500).json({ error: "Đã xảy ra lỗi khi cập nhật voucher. Vui lòng thử lại!" });
   }
 });
 
