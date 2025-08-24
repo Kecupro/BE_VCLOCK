@@ -12,7 +12,7 @@ mongoose.connect(MONGODB_URI, {
   
 })
 .catch((error) => {
-  console.error('❌ Lỗi kết nối MongoDB:', error);
+  console.error('Lỗi kết nối MongoDB:', error);
 });
 
 const conn = mongoose.createConnection(MONGODB_URI, {
@@ -28,7 +28,7 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// Cấu hình Cloudinary
+
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -89,7 +89,6 @@ app.get('/test-cors', (req, res) => {
   });
 });
 
-// Cloudinary storage cho payment methods
 const storagePM = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -106,9 +105,6 @@ const uploadPMs = multer({
   },
 });
 
-// module.exports = uploadPMs; // Removed to avoid conflict
-
-// Cloudinary storage cho upload avatar phụ
 const storageAvt = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -125,9 +121,6 @@ const uploadAvatar = multer({
   },
 });
 
-// module.exports = uploadAvatar; // Removed to avoid conflict
-
-// Cloudinary storage cho avatar
 const storageUser = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -141,7 +134,6 @@ const uploadUser = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-// Cloudinary storage cho category
 const storageCateProduct = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -158,9 +150,6 @@ const uploadCateProduct = multer({
   },
 });
 
-// module.exports = uploadCateProduct; // Removed to avoid conflict
-
-// Cloudinary storage cho brand
 const storageBrand = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -177,9 +166,6 @@ const uploadCateBrand = multer({
   },
 });
 
-// module.exports = uploadCateBrand; // Removed to avoid conflict
-
-// Cloudinary storage cho news
 const storageCateNews = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -196,9 +182,6 @@ const uploadCateNews = multer({
   },
 });
 
-// module.exports = uploadCateNews; // Removed to avoid conflict
-
-// Cloudinary storage cho product
 const storageProduct = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -215,7 +198,7 @@ const uploadDoneProduct = multer({
   },
 });
 
-// module.exports = uploadDoneProduct; // Removed to avoid conflict
+
 
 const ObjectId = mongoose.Types.ObjectId;
 const newsSchema = require("./model/schemaNews");
@@ -418,11 +401,9 @@ app.get('/api/messages/:conversationId', verifyOptionalToken, async (req, res) =
   try {
     const messages = await MessageModel.find({ conversationId }).sort({ createdAt: 1 });
     
-    // Populate thông tin user cho messages
     const populatedMessages = await Promise.all(
       messages.map(async (msg) => {
         try {
-          // Bỏ qua nếu là admin hoặc guest
           if (msg.senderId === 'admin-id' || msg.senderId === 'guest' || !msg.senderId.match(/^[0-9a-fA-F]{24}$/)) {
             return msg.toObject();
           }
@@ -528,7 +509,6 @@ app.delete('/api/conversations/:conversationId', async (req, res) => {
   }
 });
 
-// Cloudinary storage cho upload avatar chính
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -543,7 +523,6 @@ const upload = multer({
   limits: { fileSize: 1024 * 1024 * 10 }
 });
 
-// Static images - hỗ trợ cả local và Cloudinary
 app.use('/images', exp.static(path.join(__dirname, '..', 'duantn', 'public', 'images')));
 
 const jwt = require('jsonwebtoken');
@@ -770,7 +749,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Refresh token endpoint
 app.post('/refresh-token', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
@@ -1124,8 +1102,6 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
   try {
     const { orderData, amount, description, orderCode } = req.body;
     const user_id = req.user?.userId || null;
-
-    // Kiểm tra tồn kho trước khi tạo payment link
     if (orderData.cart && orderData.cart.length > 0) {
       const stockCheckPromises = orderData.cart.map(async (item) => {
         const product = await ProductModel.findById(item._id).select('name quantity');
@@ -1184,7 +1160,7 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
     const numericOrderCode = parseInt(orderCodeStr.replace(/\D/g, '')) || Date.now();
     
     const order = {
-      amount:  2000, // Sử dụng amount thực tế
+      amount:  2000, //
       description: description || `Thanh toán đơn hàng ${orderCode}`,
       orderCode: numericOrderCode,
       returnUrl: `${process.env.CORS_ORIGIN?.split(',')[0]}/checkout-success`,
@@ -1210,15 +1186,12 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
   }
 });
 
-// API để kiểm tra trạng thái đơn hàng theo orderCode
+
 app.get("/api/order-status/:orderCode", async (req, res) => {
   try {
     const { orderCode } = req.params;
-
-    // Kiểm tra temp order
     const tempOrder = await TempOrderModel.findOne({ orderCode });
     
-    // Kiểm tra đơn hàng thật
     const realOrder = await OrderModel.findOne({ orderCode });
 
     const result = {
@@ -1245,7 +1218,6 @@ app.get("/api/order-status/:orderCode", async (req, res) => {
   }
 });
 
-// API để xử lý thanh toán thành công từ frontend (fallback)
 app.post("/api/payment-success", verifyOptionalToken, async (req, res) => {
   try {
     const { orderCode } = req.body;
@@ -1254,8 +1226,6 @@ app.post("/api/payment-success", verifyOptionalToken, async (req, res) => {
     if (!orderCode) {
       return res.status(400).json({ message: "Thiếu orderCode" });
     }
-
-    // Kiểm tra xem đơn hàng đã được xử lý chưa
     const existingOrder = await OrderModel.findOne({ orderCode });
     if (existingOrder) {
       return res.json({ 
@@ -1265,13 +1235,10 @@ app.post("/api/payment-success", verifyOptionalToken, async (req, res) => {
       });
     }
 
-    // Tìm temp order
     let temp = await TempOrderModel.findOne({ orderCode });
     if (!temp) {
       return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
     }
-
-    // Xử lý tương tự như webhook
     const orderData = temp.orderData;
     let finalAddressId = orderData.address_id;
 
@@ -1317,8 +1284,6 @@ app.post("/api/payment-success", verifyOptionalToken, async (req, res) => {
     }));
 
     await OrderDetailModel.insertMany(items);
-
-    // Cập nhật tồn kho
     const stockUpdatePromises = orderData.cart.map(async (item) => {
       await ProductModel.findByIdAndUpdate(
         item._id,
@@ -1327,8 +1292,6 @@ app.post("/api/payment-success", verifyOptionalToken, async (req, res) => {
     });
 
     await Promise.all(stockUpdatePromises);
-
-    // Xóa temp order
     await TempOrderModel.findByIdAndDelete(temp._id);
 
     res.json({ 
@@ -1359,17 +1322,12 @@ app.post("/receive-hook", async (req, res) => {
   
 
   try {
-    // Tìm temp order theo orderCode
     let temp = await TempOrderModel.findOne({ orderCode });
-    
-    // Nếu không tìm thấy, thử tìm theo transactionId
     if (!temp && transactionId) {
       temp = await TempOrderModel.findOne({ 
         "orderData.orderCode": transactionId 
       });
     }
-    
-    // Nếu vẫn không tìm thấy, thử tìm theo orderCode dạng string
     if (!temp) {
       temp = await TempOrderModel.findOne({ 
         orderCode: String(orderCode) 
@@ -1409,7 +1367,6 @@ app.post("/receive-hook", async (req, res) => {
       updated_at: new Date()
     });
 
-    // Tạo thông báo cho đơn hàng đã thanh toán
     if (orderData.user_id) {
       await createOrderNotification(orderData.user_id, newOrder._id, 'processing', newOrder.orderCode);
     }
@@ -1426,8 +1383,6 @@ app.post("/receive-hook", async (req, res) => {
     }));
 
     await OrderDetailModel.insertMany(items);
-
-    // Cập nhật tồn kho sau khi thanh toán thành công
     const stockUpdatePromises = orderData.cart.map(async (item) => {
       await ProductModel.findByIdAndUpdate(
         item._id,
@@ -1436,8 +1391,6 @@ app.post("/receive-hook", async (req, res) => {
     });
 
     await Promise.all(stockUpdatePromises);
-
-    // Xóa temp order sau khi xử lý thành công
     await TempOrderModel.findByIdAndDelete(temp._id);
     
     res.status(200).json({ message: "Tạo đơn hàng thành công" });
@@ -1475,8 +1428,6 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
     if (!payment_method_id || !total_amount) {
       return res.status(400).json({ message: "Thiếu phương thức thanh toán hoặc tổng tiền." });
     }
-
-    // Kiểm tra tồn kho cho tất cả sản phẩm trong giỏ hàng
     const stockCheckPromises = cart.map(async (item) => {
       const product = await ProductModel.findById(item._id).select('name quantity');
       if (!product) {
@@ -1539,8 +1490,6 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
     if (!finalAddressId) {
       return res.status(400).json({ message: "Thiếu địa chỉ giao hàng." });
     }
-
-    // Kiểm tra payment method để xác định trạng thái thanh toán
     const paymentMethod = await PaymentMethodModel.findById(payment_method_id);
     const isCOD = paymentMethod?.code === 'COD';
     
@@ -1560,7 +1509,6 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
       updated_at: new Date()
     });
 
-    // Tạo thông báo cho đơn hàng
     if (user_id) {
       const notificationStatus = isCOD ? 'pending' : 'processing';
       await createOrderNotification(user_id, newOrder._id, notificationStatus, newOrder.orderCode);
@@ -1577,8 +1525,6 @@ app.post("/api/checkout", verifyOptionalToken, async (req, res) => {
     }));
 
     await OrderDetailModel.insertMany(orderItems);
-
-    // Cập nhật tồn kho sau khi đặt hàng thành công
     const stockUpdatePromises = cart.map(async (item) => {
       await ProductModel.findByIdAndUpdate(
         item._id,
@@ -1638,7 +1584,6 @@ app.post('/checkout/addresses', verifyOptionalToken, async (req, res) => {
   }
 });
 
-// API để lấy thông tin tồn kho real-time
 app.get('/api/products/stock-info', async (req, res) => {
   try {
     const { productIds } = req.query;
@@ -1758,6 +1703,7 @@ app.get('/api/product/:id', async (req, res) => {
           'brand.brand_status': 0
         }
       },
+
       {
         $project: {
           _id: 1,
@@ -1767,6 +1713,7 @@ app.get('/api/product/:id', async (req, res) => {
           sale_price: 1,
           quantity: 1,
           views: 1,
+
           status: 1,
           sex: 1,
           case_diameter: 1,
@@ -1805,8 +1752,6 @@ app.get('/api/product/:id', async (req, res) => {
     res.status(500).json({ error: 'Lỗi máy chủ', details: err.message });
   }
 });
-
-// API để tăng lượt xem sản phẩm
 app.post('/api/product/:id/increment-view', async (req, res) => {
   try {
     const { id } = req.params;
@@ -2690,12 +2635,9 @@ app.delete('/user/addresses/:id', verifyToken, async (req, res) => {
           } },
           { $replaceRoot: { newRoot: '$doc' } },
       ];
-
-      // Tạo pipeline để đếm tổng số sản phẩm
       const countPipeline = [...aggregationPipeline];
       countPipeline.push({ $count: "total" });
 
-      // Thêm pagination vào pipeline chính
       aggregationPipeline.push({ $skip: skip });
       aggregationPipeline.push({ $limit: itemsPerPage });
 
@@ -2726,7 +2668,7 @@ app.get('/api/news', async (req, res) => {
     const skip = (page - 1) * limit;
 
     const news = await NewsModel.aggregate([
-      { $match: { news_status: 0 } }, // Chỉ lấy tin tức công khai
+      { $match: { news_status: 0 } }, 
       {
         $lookup: {
           from: 'category_news',
@@ -2754,7 +2696,7 @@ app.get('/api/news', async (req, res) => {
       { $limit: limit }
     ]);
 
-    const total = await NewsModel.countDocuments({ news_status: 0 }); // Đếm chỉ tin tức công khai
+    const total = await NewsModel.countDocuments({ news_status: 0 }); 
 
     res.json({
       news,
@@ -2771,7 +2713,7 @@ app.get('/api/news/:id', async (req, res) => {
   try {
     const newsId = new ObjectId(req.params.id);
     const news = await NewsModel.aggregate([
-      { $match: { _id: newsId, news_status: 0 } }, // Chỉ lấy tin tức công khai
+      { $match: { _id: newsId, news_status: 0 } }, 
       {
         $lookup: {
           from: 'category_news',
@@ -2839,7 +2781,7 @@ app.get('/api/news/category/:categoryId', async (req, res) => {
     const skip = (page - 1) * limit;
 
     const news = await NewsModel.aggregate([
-      { $match: { categorynews_id: categoryId, news_status: 0 } }, // Chỉ lấy tin tức công khai
+      { $match: { categorynews_id: categoryId, news_status: 0 } }, 
       {
         $lookup: {
           from: 'category_news',
@@ -2867,8 +2809,7 @@ app.get('/api/news/category/:categoryId', async (req, res) => {
       { $limit: limit }
     ]);
 
-    const total = await NewsModel.countDocuments({ categorynews_id: categoryId, news_status: 0 }); // Đếm chỉ tin tức công khai
-
+    const total = await NewsModel.countDocuments({ categorynews_id: categoryId, news_status: 0 }); 
     res.json({
       news,
       currentPage: page,
@@ -2898,7 +2839,6 @@ app.get('/user/wishlist', verifyToken, async (req, res) => {
           .sort({ created_at: -1 });
 
       const result = await Promise.all(wishlistItems.map(async item => {
-          // Kiểm tra nếu product_id là null (sản phẩm đã bị xóa)
           if (!item.product_id) {
               return null;
           }
@@ -2924,10 +2864,7 @@ app.get('/user/wishlist', verifyToken, async (req, res) => {
           };
       }));
 
-      // Lọc bỏ các item null (sản phẩm đã bị xóa)
       const filteredResult = result.filter(item => item !== null);
-      
-      // Tự động xóa các wishlist item có sản phẩm đã bị xóa
       const nullItems = result.filter(item => item === null);
       if (nullItems.length > 0) {
           const nullWishlistIds = wishlistItems
@@ -3120,13 +3057,8 @@ app.put("/api/cancel-order/:order_id", async (req, res) => {
     order.order_status = "cancelled";
     order.updated_at = new Date();
     await order.save();
-
-    // Cập nhật lại số lượng tồn kho khi hủy đơn hàng
     try {
-      // Lấy chi tiết đơn hàng
       const orderDetails = await OrderDetailModel.find({ order_id: order_id });
-      
-      // Cập nhật số lượng tồn kho cho từng sản phẩm
       for (const detail of orderDetails) {
         await ProductModel.findByIdAndUpdate(
           detail.product_id,
@@ -3138,7 +3070,6 @@ app.put("/api/cancel-order/:order_id", async (req, res) => {
       console.log(`Đã cập nhật lại tồn kho cho đơn hàng ${order_id}`);
     } catch (stockError) {
       console.error('Lỗi khi cập nhật tồn kho:', stockError);
-      // Không trả về lỗi cho người dùng vì đơn hàng đã được hủy thành công
     }
 
     res.json({ message: "Đơn hàng đã được hủy thành công." });
@@ -3170,19 +3101,13 @@ app.put("/api/return-order/:order_id", async (req, res) => {
     }
 
     order.order_status = "returned";
-    
-    // Kiểm tra phương thức thanh toán để quyết định có hoàn tiền hay không
     const paymentMethod = await PaymentMethodModel.findById(order.payment_method_id);
     const isCOD = paymentMethod?.code === 'COD';
-    
-    // Chỉ chuyển sang chờ hoàn tiền nếu KHÔNG phải COD và đã thanh toán
     if (!isCOD && order.payment_status === "paid") {
       order.payment_status = "refunding";
     }
     order.note = (order.note || "") + `\nTrả hàng: ${reason}`;
     await order.save();
-
-    // Tạo thông báo cho khách hàng
     if (order.user_id) {
       const notificationStatus = isCOD ? 'returned' : 'refunding';
       await createOrderNotification(
@@ -3193,12 +3118,8 @@ app.put("/api/return-order/:order_id", async (req, res) => {
       );
     }
 
-    // Cập nhật lại số lượng tồn kho khi trả hàng
     try {
-      // Lấy chi tiết đơn hàng
       const orderDetails = await OrderDetailModel.find({ order_id: order_id });
-      
-      // Cập nhật số lượng tồn kho cho từng sản phẩm
       for (const detail of orderDetails) {
         await ProductModel.findByIdAndUpdate(
           detail.product_id,
@@ -3210,7 +3131,6 @@ app.put("/api/return-order/:order_id", async (req, res) => {
       console.log(`Đã cập nhật lại tồn kho cho đơn hàng trả ${order_id}`);
     } catch (stockError) {
       console.error('Lỗi khi cập nhật tồn kho:', stockError);
-      // Không trả về lỗi cho người dùng vì đơn hàng đã được trả thành công
     }
 
     return res.status(200).json({ success: true });
@@ -4534,10 +4454,10 @@ app.post(
     try {
       const currentUser = req.user;
 
-      if (!currentUser || Number(currentUser.role) != 2) {
+      if (!currentUser || Number(currentUser.role) < 1) {
         return res
           .status(403)
-          .json({ message: "Bạn không có quyền tạo admin." });
+          .json({ message: "Bạn không có quyền tạo người dùng." });
       }
 
       let { username, password, email, role, account_status, fullName } =
@@ -4821,8 +4741,6 @@ app.get("/api/admin/order", async (req, res) => {
       'refunding': 'choHoanTien',
       'refunded': 'hoanTien'
     };
-
-    // Convert backend status to frontend status for list
     for (const order of list) {
       if (order.order_status && reverseStatusMapping[order.order_status]) {
         order.order_status = reverseStatusMapping[order.order_status];
@@ -4832,10 +4750,8 @@ app.get("/api/admin/order", async (req, res) => {
       }
     }
 
-    // Get all orders for counting
-    const allOrders = await OrderModel.find({}).lean();
 
-    // Convert backend status to frontend status for all orders
+    const allOrders = await OrderModel.find({}).lean();
     for (const order of allOrders) {
       if (order.order_status && reverseStatusMapping[order.order_status]) {
         order.order_status = reverseStatusMapping[order.order_status];
@@ -4958,13 +4874,10 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
     );
 
     if (updated) {
-      // Cập nhật lại số lượng tồn kho khi hủy đơn hàng
       if (order_status === 'daHuy') {
         try {
-          // Lấy chi tiết đơn hàng
           const orderDetails = await OrderDetailModel.find({ order_id: id });
           
-          // Cập nhật số lượng tồn kho cho từng sản phẩm
           for (const detail of orderDetails) {
             await ProductModel.findByIdAndUpdate(
               detail.product_id,
@@ -4976,11 +4889,8 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
           console.log(`Đã cập nhật lại tồn kho cho đơn hàng ${id}`);
         } catch (stockError) {
           console.error('Lỗi khi cập nhật tồn kho:', stockError);
-          // Không trả về lỗi cho người dùng vì đơn hàng đã được hủy thành công
         }
       }
-
-      // Định nghĩa mapping cho thông báo
       const statusNotificationMapping = {
         'choXuLy': 'pending',
         'dangXuLy': 'processing', 
@@ -4993,12 +4903,9 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
         'choHoanTien': 'refunding',
         'hoanTien': 'refunded'
       };
-
-      // Tạo thông báo khi cập nhật trạng thái đơn hàng
       if (order_status && updated.user_id) {
         const notificationStatus = statusNotificationMapping[order_status];
         if (notificationStatus) {
-          // Tạo thông báo cho trạng thái tương ứng
           await createOrderNotification(
             updated.user_id, 
             updated._id, 
@@ -5007,12 +4914,9 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
           );
         }
       }
-
-      // Tạo thông báo khi cập nhật trạng thái thanh toán
       if (payment_status && updated.user_id) {
         const paymentNotificationStatus = paymentStatusNotificationMapping[payment_status];
         if (paymentNotificationStatus) {
-          // Tạo thông báo cho trạng thái thanh toán tương ứng
           await createOrderNotification(
             updated.user_id, 
             updated._id, 
@@ -5420,13 +5324,10 @@ app.post("/api/admin/voucher/them", async (req, res) => {
   } = req.body;
 
   try {
-    // Kiểm tra xem voucher_code đã tồn tại chưa
     const existingVoucher = await VoucherModel.findOne({ voucher_code });
     if (existingVoucher) {
       return res.status(400).json({ error: "Mã khuyến mãi đã tồn tại!" });
     }
-
-    // Kiểm tra xem voucher_name đã tồn tại chưa
     const existingVoucherName = await VoucherModel.findOne({ voucher_name });
     if (existingVoucherName) {
       return res.status(400).json({ error: "Tên khuyến mãi đã tồn tại!" });
@@ -5452,9 +5353,7 @@ app.post("/api/admin/voucher/them", async (req, res) => {
   } catch (error) {
     console.error("Lỗi khi thêm voucher:", error);
     
-    // Xử lý các loại lỗi khác nhau
     if (error.code === 11000) {
-      // Lỗi duplicate key từ MongoDB
       const field = Object.keys(error.keyPattern)[0];
       if (field === 'voucher_code') {
         return res.status(400).json({ error: "Mã khuyến mãi đã tồn tại!" });
@@ -5463,7 +5362,6 @@ app.post("/api/admin/voucher/them", async (req, res) => {
       }
     }
     
-    // Lỗi validation
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({ error: errors.join(', ') });
@@ -5487,13 +5385,11 @@ app.put("/api/admin/voucher/sua/:id", async (req, res) => {
   } = req.body;
 
   try {
-    // Kiểm tra xem voucher có tồn tại không
     const existingVoucher = await VoucherModel.findById(id);
     if (!existingVoucher) {
       return res.status(404).json({ error: "Không tìm thấy voucher với ID này." });
     }
 
-    // Kiểm tra xem voucher_code đã tồn tại ở voucher khác chưa
     const duplicateCode = await VoucherModel.findOne({ 
       voucher_code, 
       _id: { $ne: id } 
@@ -5501,8 +5397,6 @@ app.put("/api/admin/voucher/sua/:id", async (req, res) => {
     if (duplicateCode) {
       return res.status(400).json({ error: "Mã khuyến mãi đã tồn tại!" });
     }
-
-    // Kiểm tra xem voucher_name đã tồn tại ở voucher khác chưa
     const duplicateName = await VoucherModel.findOne({ 
       voucher_name, 
       _id: { $ne: id } 
@@ -5533,10 +5427,7 @@ app.put("/api/admin/voucher/sua/:id", async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi cập nhật voucher:", error);
-    
-    // Xử lý các loại lỗi khác nhau
     if (error.code === 11000) {
-      // Lỗi duplicate key từ MongoDB
       const field = Object.keys(error.keyPattern)[0];
       if (field === 'voucher_code') {
         return res.status(400).json({ error: "Mã khuyến mãi đã tồn tại!" });
@@ -5545,7 +5436,6 @@ app.put("/api/admin/voucher/sua/:id", async (req, res) => {
       }
     }
     
-    // Lỗi validation
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({ error: errors.join(', ') });
@@ -6164,9 +6054,6 @@ app.get("/check-username", async (req, res) => {
   res.json({ exists: !!user });
 });
 
-// ==================== NOTIFICATION APIs ====================
-
-// Get user notifications
 app.get('/api/notifications', verifyToken, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -6200,7 +6087,6 @@ app.get('/api/notifications', verifyToken, async (req, res) => {
   }
 });
 
-// Mark notification as read
 app.put('/api/notifications/:id/read', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -6223,7 +6109,6 @@ app.put('/api/notifications/:id/read', verifyToken, async (req, res) => {
   }
 });
 
-// Mark all notifications as read
 app.put('/api/notifications/mark-all-read', verifyToken, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -6240,7 +6125,6 @@ app.put('/api/notifications/mark-all-read', verifyToken, async (req, res) => {
   }
 });
 
-// Create notification (for admin use)
 app.post('/api/notifications/create', verifyToken, isAdmin, async (req, res) => {
   try {
     const { userId, title, message, type = 'system', orderId } = req.body;
@@ -6269,7 +6153,6 @@ app.post('/api/notifications/create', verifyToken, isAdmin, async (req, res) => 
   }
 });
 
-// Function to create order status notification
 const createOrderNotification = async (userId, orderId, orderStatus, orderCode) => {
   try {
     let title, message;
