@@ -1160,7 +1160,7 @@ app.post("/create-payment-link", verifyOptionalToken, async (req, res) => {
     const numericOrderCode = parseInt(orderCodeStr.replace(/\D/g, '')) || Date.now();
     
     const order = {
-      amount:  2000, //
+      amount: amount, //
       description: description || `Thanh toán đơn hàng ${orderCode}`,
       orderCode: numericOrderCode,
       returnUrl: `${process.env.CORS_ORIGIN?.split(',')[0]}/checkout-success`,
