@@ -733,7 +733,7 @@ app.post('/login', async (req, res) => {
     const token = jwt.sign(
       { userId: user._id, username: user.username, role: user.role },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '3d' }
     );
 
     const { password_hash: _, ...userWithoutPassword } = user.toObject();
@@ -759,7 +759,7 @@ app.post('/refresh-token', verifyToken, async (req, res) => {
     const newToken = jwt.sign(
       { userId: user._id, username: user.username, role: user.role },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '3d' }
     );
     
     const { password_hash: _, ...userWithoutPassword } = user.toObject();
@@ -899,7 +899,7 @@ app.get('/auth/google/callback',
     const token = jwt.sign(
       { userId: req.user._id, username: req.user.username, role: req.user.role },
       process.env.JWT_SECRET || 'your_jwt_secret_key',
-      { expiresIn: '1d' }
+      { expiresIn: '3d' }
     );
     const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0];
     res.redirect(`${frontendUrl}/auth/google/success?token=${token}`);
@@ -916,7 +916,7 @@ app.get('/auth/facebook/callback',
     const token = jwt.sign(
       { userId: req.user._id, username: req.user.username, role: req.user.role },
       process.env.JWT_SECRET || 'your_jwt_secret_key',
-      { expiresIn: '1d' }
+      { expiresIn: '3d' }
     );
     const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0];
     res.redirect(`${frontendUrl}/auth/facebook/success?token=${token}`);
