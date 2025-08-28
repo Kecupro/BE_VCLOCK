@@ -289,6 +289,12 @@ const { Server } = require('socket.io');
 const server = http.createServer(app);
 const { body, validationResult } = require('express-validator');
 const nodemailer = require('nodemailer');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+
 
 const io = new Server(server, {
   cors: {
@@ -299,99 +305,362 @@ const io = new Server(server, {
 
 app.use(exp.json());
 
-io.on('connection', (socket) => {
+// Socket.IO xử lý chat
+io.on("connection", (socket) => {
 
-  socket.on('typing', ({ conversationId, userId }) => {
-    socket.to(conversationId).emit('typing', { userId });
-  });
 
-  socket.on('joinConversation', (conversationId) => {
-    socket.join(conversationId);
-  });
-
-  socket.on('sendMessage', async (msg) => {
+  socket.on("sendMessage", async (msg) => {
     try {
-      let senderId = msg.senderId || 'guest';
-      let senderName = msg.senderName || 'Khách';
-      let senderAvatar = msg.senderAvatar || '';
-  
-      if (msg.token) {
-        try {
-          const decoded = jwt.verify(msg.token, process.env.JWT_SECRET);
-
-          if (decoded) {
-            senderId = decoded.id;
-            senderName = decoded.name;
-            senderAvatar = decoded.avatar || '';
-          }
-        } catch (err) {
-          console.warn('❗ Token không hợp lệ hoặc hết hạn:', err.message);
-        }
-      }
-  
-      const newMessage = new MessageModel({
+      const newMsg = new MessageModel({
         ...msg,
-        senderId,
-        senderName,
-        senderAvatar,
         createdAt: new Date(),
       });
-  
-      await newMessage.save();
-  
-      await ConversationModel.findOneAndUpdate(
-        { conversationId: msg.conversationId },
-        {
+      await newMsg.save();
+
+      // Tách tạo mới và update
+      const conv = await ConversationModel.findOne({ conversationId: msg.conversationId });
+      if (!conv) {
+        await ConversationModel.create({
           conversationId: msg.conversationId,
-          $addToSet: {
-            participants: {
-              userId: senderId,
-              userName: senderName,
-              userAvatar: senderAvatar,
+          participants: [],
+          lastMessage: msg.text,
+          lastMessageType: msg.messageType,
+          lastMessageSenderId: msg.senderId,
+          lastTime: new Date(),
+        });
+      } else {
+        await ConversationModel.updateOne(
+          { conversationId: msg.conversationId },
+          {
+            $set: {
+              lastMessage: msg.text,
+              lastMessageType: msg.messageType,
+              lastMessageSenderId: msg.senderId,
+              lastTime: new Date(),
+            },
+            $inc: { "participants.$[elem].unreadCount": 1 }
+          },
+          {
+            arrayFilters: [{ "elem.userId": { $ne: msg.senderId } }]
+          }
+        );
+      }
+
+      io.to(msg.conversationId).emit("receiveMessage", newMsg);
+
+      // AI chỉ trả lời khách, không trả lời admin
+      if (msg.senderId !== "AI_BOT" && msg.senderId !== "admin-id") {
+        const text = msg.text.toLowerCase();
+
+        let aiMsg;
+
+        if (text.includes("sản phẩm") || text.includes("đồng hồ") || text.includes("mẫu")) {
+        const limit = 4;
+
+        // --- 1) Phân tích câu giá ---
+        // Hỗ trợ: "50 triệu", "50tr", "50m", "50.000.000", "50000000"
+        const priceRegex = /(\d{1,3}(?:[.\s]\d{3})+|\d+(?:[.,]\d+)?)(?:\s*)(triệu|tr|trieu|m|vnđ|vnd|đ)?/i;
+        const m = text.match(priceRegex);
+
+        const hasUpper = /(dưới|nhỏ hơn|ít hơn|<=)/i.test(text);
+        const hasLower = /(trên|lớn hơn|cao hơn|>=)/i.test(text);
+
+        let priceValue = null;
+        if (m) {
+          // làm sạch số (50.000.000 -> 50000000, 2,5 -> 2.5)
+          let raw = m[1].replace(/\s|\./g, '').replace(',', '.');
+          let num = parseFloat(raw);
+          const unit = (m[2] || '').toLowerCase();
+
+          if (['triệu', 'tr', 'trieu', 'm'].includes(unit)) {
+            priceValue = Math.round(num * 1_000_000);
+          } else {
+            // nếu người dùng ghi thẳng VND (>= 1e6) thì giữ nguyên
+            priceValue = Math.round(num >= 1_000_000 ? num : num * 1_000_000);
+          }
+        }
+
+        // --- 2) Làm sạch từ khóa tên ---
+        let cleanText = text
+          .replace(priceRegex, '')
+          .replace(/sản phẩm|đồng hồ|mẫu|tham khảo/gi, '')
+          .trim();
+
+        const useName = cleanText.length > 2;
+
+        // --- 3) Tạo pipeline cơ bản: tính effective_price trước rồi mới match ---
+const baseAddFields = [
+          {
+            $addFields: {
+              // ép kiểu an toàn nếu DB lưu string
+              price_num: {
+                $cond: [{ $isNumber: "$price" }, "$price", { $toDouble: "$price" }]
+              },
+              sale_price_num: {
+                $cond: [{ $isNumber: "$sale_price" }, "$sale_price", { $toDouble: "$sale_price" }]
+              }
             }
           },
-          lastMessage: msg.text || (msg.image ? '[Hình ảnh]' : msg.file ? '[File]' : ''),
-          lastMessageType: msg.messageType,
-          lastMessageSenderId: senderId,
-          lastTime: new Date(),
-        },
-        { upsert: true, new: true }
-      );
-  
-      io.to(msg.conversationId).emit('newMessage', newMessage);
-  
-    } catch (error) {
-      console.error('❌ Lỗi khi gửi tin nhắn:', error);
-    }
-  });
+          {
+            $addFields: {
+              effective_price: {
+                $cond: [
+                  { $and: [{ $ne: ["$sale_price_num", null] }, { $gt: ["$sale_price_num", 0] }] },
+                  "$sale_price_num",
+                  "$price_num"
+                ]
+              }
+            }
+          }
+        ];
 
-  socket.on('seenMessage', async ({ conversationId, userId }) => {
-    try {
-      await MessageModel.updateMany(
-        { conversationId, seenBy: { $ne: userId } },
-        { $addToSet: { seenBy: userId } }
-      );
-      io.to(conversationId).emit('messagesSeen', { conversationId, userId });
-    } catch (error) {
-      console.error('❌ Lỗi khi cập nhật seen:', error);
-    }
-  });
+        const buildLookupStages = () => ([
+          {
+            $lookup: {
+              from: "product_images",
+              let: { pid: "$_id" },
+              pipeline: [
+                { $match: { $expr: { $eq: ["$product_id", "$$pid"] } } },
+                { $project: { _id: 1, image: 1, alt: 1, is_main: 1 } }
+              ],
+              as: "images"
+            }
+          },
+          {
+            $addFields: {
+              main_image: {
+                $let: {
+                  vars: {
+                    mains: {
+                      $filter: {
+                        input: "$images",
+                        as: "img",
+                        cond: { $eq: ["$$img.is_main", true] }
+                      }
+                    }
+                  },
+                  in: {
+                    $cond: [
+                      { $gt: [{ $size: "$$mains" }, 0] },
+                      { image: { $arrayElemAt: ["$$mains.image", 0] }, alt: { $arrayElemAt: ["$$mains.alt", 0] } },
+                      // nếu không có is_main, lấy ảnh đầu tiên
+                      {
+                        $cond: [
+                          { $gt: [{ $size: "$images" }, 0] },
+                          { image: { $arrayElemAt: ["$images.image", 0] }, alt: { $arrayElemAt: ["$images.alt", 0] } },
+                          null
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            $lookup: {
+              from: "brands",
+              localField: "brand_id",
+              foreignField: "_id",
+              as: "brand"
+            }
+          },
+          { $unwind: "$brand" },
+          // Nếu nghi ngờ brand_status làm rỗng kết quả, có thể tạm comment dòng dưới để test
+          { $match: { "brand.brand_status": 0 } },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              price: 1,
+              sale_price: 1,
+              effective_price: 1,
+              main_image: 1,
+              brand: { _id: 1, name: 1 }
+            }
+          }
+]);
 
-  socket.on('disconnect', () => {
-  
-  });
+        // --- 4) Tạo $match theo tiêu chí ---
+        const matchBoth = {};
+        let hasPriceFilter = false;
 
-  socket.on('deleteMessage', async ({ messageId, conversationId }) => {
-    try {
-      const deletedMessage = await MessageModel.findByIdAndDelete(messageId);
-      if (deletedMessage) {
-        io.to(conversationId).emit('messageDeleted', { messageId });
+        if (priceValue) {
+          hasPriceFilter = true;
+          if (hasUpper && !hasLower) {
+            matchBoth.effective_price = { $lte: priceValue };
+          } else if (hasLower && !hasUpper) {
+            matchBoth.effective_price = { $gte: priceValue };
+          } else {
+            // nếu chỉ ghi "50 triệu" không kèm dưới/trên → coi như khoảng ±20%
+            const delta = Math.round(priceValue * 0.2);
+            matchBoth.effective_price = { $gte: priceValue - delta, $lte: priceValue + delta };
+          }
+        }
+
+        if (useName) {
+          matchBoth.name = { $regex: cleanText, $options: "i" };
+        }
+
+        // --- 5) Try 1: lọc theo (giá + tên nếu có) ---
+        let stages1 = [
+          ...baseAddFields,
+          Object.keys(matchBoth).length ? { $match: matchBoth } : { $match: {} },
+          { $sort: priceValue ? { effective_price: 1 } : { _id: -1 } },
+          { $limit: limit },
+          ...buildLookupStages()
+        ];
+        let products = await ProductModel.aggregate(stages1);
+
+        // --- 6) Try 2: nếu rỗng và có dùng tên → bỏ tên, GIỮ GIÁ ---
+        if (products.length === 0 && useName && hasPriceFilter) {
+          const matchPriceOnly = { effective_price: matchBoth.effective_price };
+          let stages2 = [
+            ...baseAddFields,
+            { $match: matchPriceOnly },
+            // nếu "dưới": ưu tiên gần ngưỡng nên sort giảm dần; nếu "trên": sort tăng dần
+            ...(hasUpper ? [{ $sort: { effective_price: -1 } }] : hasLower ? [{ $sort: { effective_price: 1 } }] : [{ $sort: { effective_price: 1 } }]),
+            { $limit: limit },
+            ...buildLookupStages()
+          ];
+          products = await ProductModel.aggregate(stages2);
+        }
+
+        // --- 7) Try 3: nếu vẫn rỗng nhưng có giá → gợi ý gần nhất VẪN đúng ràng buộc giá ---
+        if (products.length === 0 && hasPriceFilter) {
+          const nearMatch = hasUpper
+            ? { effective_price: { $lte: priceValue } }
+            : hasLower
+            ? { effective_price: { $gte: priceValue } }
+            : {}; // nếu là "khoảng", đã thử ở try 1
+
+          let stages3 = [
+            ...baseAddFields,
+            Object.keys(nearMatch).length ? { $match: nearMatch } : { $match: {} },
+            ...(hasUpper ? [{ $sort: { effective_price: -1 } }] : hasLower ? [{ $sort: { effective_price: 1 } }] : [{ $sort: { effective_price: 1 } }]),
+            { $limit: limit },
+            ...buildLookupStages()
+          ];
+          products = await ProductModel.aggregate(stages3);
+        }
+
+        // --- 8) Try 4: chỉ random khi KHÔNG có tiêu chí nào cả ---
+        if (products.length === 0 && !hasPriceFilter && !useName) {
+products = await ProductModel.aggregate([
+            { $sample: { size: limit } },
+            ...buildLookupStages()
+          ]);
+        }
+
+        // --- 9) Compose trả lời ---
+        let replyText;
+        if (products.length > 0) {
+          if (hasPriceFilter) {
+            if (hasUpper) replyText = `Mình gợi ý các mẫu **dưới ${priceValue.toLocaleString()}₫**:`;
+            else if (hasLower) replyText = `Mình gợi ý các mẫu **trên ${priceValue.toLocaleString()}₫**:`;
+            else replyText = `Mình gợi ý các mẫu **khoảng ${priceValue.toLocaleString()}₫**:`;
+          } else {
+            replyText = "Dưới đây là sản phẩm bạn cần:";
+          }
+        } else {
+          replyText = hasPriceFilter
+            ? "Hiện tại chưa có mẫu đúng mức giá bạn muốn. Bạn muốn nới khoảng giá một chút không?"
+            : "Xin lỗi, hiện tại chưa có sản phẩm phù hợp. Bạn muốn xem mẫu khác không?";
+        }
+
+        aiMsg = {
+          conversationId: msg.conversationId,
+          senderId: "AI_BOT",
+          senderName: "ChatBot",
+          senderAvatar: "https://img.freepik.com/free-vector/chatbot-chat-message-vectorart_78370-4104.jpg",
+          text: replyText,
+          messageType: "products",
+          products: products.map(p => ({
+            id: p._id,
+            name: p.name,
+            price: p.price,
+            sale_price: p.sale_price,
+            main_image: p.main_image,
+            brand: p.brand,
+          })),
+        };
+
       }
-    } catch (error) {
-      console.error('❌ Lỗi khi xoá tin nhắn:', error);
+        else {
+          // AI trả lời có role-play như nhân viên VClock Store
+          const prompt = `
+          Bạn là nhân viên bán hàng online của VClock Store (https://vclock.store).
+          Bạn phải:
+          - Chỉ trả lời dựa trên dữ liệu của VClock Store.
+          - Nếu không biết thông tin, hãy nói "Hiện tại mình chưa có thông tin này, bạn có muốn xem thêm các mẫu đồng hồ khác không?".
+          - Trả lời thân thiện, ngắn gọn, tập trung vào sản phẩm đồng hồ.
+          - Nếu khách hỏi về sản phẩm, chỉ lấy dữ liệu từ DB MongoDB (collection products, brands, promotions).
+          Khách hỏi: ${msg.text}
+          `;
+
+          const result = await model.generateContent(prompt);
+          const aiText = result.response.text();
+
+          aiMsg = {
+            conversationId: msg.conversationId,
+            senderId: "AI_BOT",
+            senderName: "ChatBot",
+            senderAvatar: "https://img.freepik.com/free-vector/chatbot-chat-message-vectorart_78370-4104.jpg",
+            text: aiText,
+            messageType: "text",
+          };
+        }
+
+        const savedAiMsg = new MessageModel(aiMsg);
+        await savedAiMsg.save();
+
+        await ConversationModel.updateOne(
+          { conversationId: msg.conversationId },
+          {
+            $set: {
+lastMessage: aiMsg.text,
+              lastMessageType: aiMsg.messageType,
+              lastMessageSenderId: "AI_BOT",
+              lastTime: new Date(),
+            },
+            $inc: { "participants.$[elem].unreadCount": 1 }
+          },
+          {
+            arrayFilters: [{ "elem.userId": { $ne: "AI_BOT" } }]
+          }
+        );
+
+        io.to(msg.conversationId).emit("receiveMessage", aiMsg);
+      }
+    } catch (err) {
+      console.error("Error saving message:", err);
+      io.to(msg.conversationId).emit("receiveMessage", {
+        conversationId: msg.conversationId,
+        senderId: "AI_BOT",
+        senderName: "ChatBot",
+        senderAvatar: "https://img.freepik.com/free-vector/chatbot-chat-message-vectorart_78370-4104.jpg",
+        text: "Xin lỗi, hiện tại hệ thống đang quá tải. Vui lòng thử lại sau!",
+        messageType: "text",
+      });
     }
   });
-  
+
+  socket.on("joinConversation", (conversationId) => {
+    socket.join(conversationId);
+
+  });
+
+  socket.on("disconnect", () => {
+
+  });
+
+  socket.on("seenMessage", async ({ conversationId, userId }) => {
+    await ConversationModel.updateOne(
+      { conversationId, "participants.userId": userId },
+      { $set: { "participants.$.unreadCount": 0 } }
+    );
+    io.to(conversationId).emit("messagesSeen", { conversationId, userId });
+  });
 });
 
 app.get('/api/messages/:conversationId', verifyOptionalToken, async (req, res) => {
@@ -436,7 +705,7 @@ app.get('/api/conversations', async (req, res) => {
     
     const populatedConversations = await Promise.all(
       conversations.map(async (conv) => {
-        const updatedParticipants = await Promise.all(
+const updatedParticipants = await Promise.all(
           conv.participants.map(async (participant) => {
             try {
               if (participant.userId === 'admin-id' || participant.userId === 'guest' || !participant.userId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -508,6 +777,7 @@ app.delete('/api/conversations/:conversationId', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
@@ -2305,6 +2575,11 @@ app.get('/api/brand', async function (req, res) {
   try {
     const brandsWithProductCount = await BrandModel.aggregate([
       {
+        $match: {
+          brand_status: 0  
+        }
+      },
+      {
         $lookup: {
           from: 'products',
           localField: '_id',
@@ -2873,7 +3148,7 @@ app.get('/user/wishlist', verifyToken, async (req, res) => {
           
           if (nullWishlistIds.length > 0) {
               await WishlistModel.deleteMany({ _id: { $in: nullWishlistIds } });
-              console.log(`Đã xóa ${nullWishlistIds.length} wishlist item có sản phẩm đã bị xóa`);
+
           }
       }
 
@@ -3067,7 +3342,7 @@ app.put("/api/cancel-order/:order_id", async (req, res) => {
         );
       }
       
-      console.log(`Đã cập nhật lại tồn kho cho đơn hàng ${order_id}`);
+      
     } catch (stockError) {
       console.error('Lỗi khi cập nhật tồn kho:', stockError);
     }
@@ -3103,7 +3378,9 @@ app.put("/api/return-order/:order_id", async (req, res) => {
     order.order_status = "returned";
     const paymentMethod = await PaymentMethodModel.findById(order.payment_method_id);
     const isCOD = paymentMethod?.code === 'COD';
-    if (!isCOD && order.payment_status === "paid") {
+    
+    // Cập nhật payment_status cho cả COD và non-COD khi đã thanh toán
+    if (order.payment_status === "paid") {
       order.payment_status = "refunding";
     }
     order.note = (order.note || "") + `\nTrả hàng: ${reason}`;
@@ -3128,7 +3405,7 @@ app.put("/api/return-order/:order_id", async (req, res) => {
         );
       }
       
-      console.log(`Đã cập nhật lại tồn kho cho đơn hàng trả ${order_id}`);
+      
     } catch (stockError) {
       console.error('Lỗi khi cập nhật tồn kho:', stockError);
     }
@@ -3339,13 +3616,91 @@ app.get("/voucher-user", verifyToken, async (req, res) => {
     const voucherIds = savedVoucherLinks.map((vu) => vu.voucher_id);
     const vouchers = await VoucherModel.find({ _id: { $in: voucherIds } });
 
-    const result = vouchers.map((v) => {
+    // Lọc voucher theo target_audience (sử dụng cùng logic với /api/voucher-user/available)
+    const user = await UserModel.findById(user_id);
+    let customerType = 'new_customer';
+    
+    if (user) {
+      // Xác định loại khách hàng chỉ dựa trên số đơn hàng
+      const orderCount = await OrderModel.countDocuments({ user_id });
+      
+      if (orderCount >= 5) {
+        customerType = 'vip_customer';
+      } else if (orderCount >= 2) {
+        customerType = 'loyal_customer';
+      } else {
+        customerType = 'new_customer';
+      }
+      
+      // Bỏ debug logs
+    }
+
+    const filteredVouchers = vouchers.filter(v => 
+      v.target_audience === 'all' || v.target_audience === customerType
+    );
+
+    const result = filteredVouchers.map((v) => {
       const link = savedVoucherLinks.find((vu) => vu.voucher_id.toString() === v._id.toString());
       return { ...v.toObject(), _id: v._id, voucher_user_id: link?._id, used: link?.used };
     });
     res.json(result);
   } catch (err) {
     res.status(500).json({ message: "Lỗi khi lấy voucher đã lưu" });
+  }
+});
+
+// API mới để lấy tất cả voucher phù hợp với target_audience của user
+app.get("/api/voucher-user/available", verifyToken, async (req, res) => {
+  try {
+    const user_id = req.user.userId;
+
+    // Lấy thông tin user để xác định loại khách hàng
+    const user = await UserModel.findById(user_id);
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    // Xác định loại khách hàng chỉ dựa trên số đơn hàng
+    const orderCount = await OrderModel.countDocuments({ user_id });
+    let customerType = 'new_customer';
+    
+    if (orderCount >= 5) {
+      customerType = 'vip_customer';
+    } else if (orderCount >= 2) {
+      customerType = 'loyal_customer';
+    } else {
+      customerType = 'new_customer';
+    }
+
+    // Lấy tất cả voucher phù hợp với target_audience
+    const availableVouchers = await VoucherModel.find({
+      $or: [
+        { target_audience: 'all' },
+        { target_audience: customerType }
+      ]
+    });
+
+    // Lấy thông tin voucher đã lưu của user
+    const savedVoucherLinks = await VoucherUserModel.find({ user_id });
+    const savedVoucherIds = savedVoucherLinks.map(vu => vu.voucher_id.toString());
+
+    // Thêm thông tin đã lưu và đã sử dụng
+    const result = availableVouchers.map(voucher => {
+      const savedLink = savedVoucherLinks.find(vu => 
+        vu.voucher_id.toString() === voucher._id.toString()
+      );
+      return {
+        ...voucher.toObject(),
+        isSaved: !!savedLink,
+        used: savedLink?.used || false,
+        voucher_user_id: savedLink?._id
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('Lỗi khi lấy voucher available:', err);
+    res.status(500).json({ message: "Lỗi khi lấy voucher khả dụng" });
   }
 });
 
@@ -3361,6 +3716,31 @@ app.post("/api/voucher-user/save", verifyToken, async (req, res) => {
 
     if (new Date() > new Date(voucher.end_date)) {
       return res.status(400).json({ message: "Voucher đã hết hạn" });
+    }
+
+    // Kiểm tra xem user có phù hợp với target_audience của voucher không
+    const user = await UserModel.findById(user_id);
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    // Xác định loại khách hàng chỉ dựa trên số đơn hàng
+    const orderCount = await OrderModel.countDocuments({ user_id });
+    let customerType = 'new_customer';
+    
+    if (orderCount >= 5) {
+      customerType = 'vip_customer';
+    } else if (orderCount >= 2) {
+      customerType = 'loyal_customer';
+    } else {
+      customerType = 'new_customer';
+    }
+
+    // Kiểm tra target_audience
+    if (voucher.target_audience !== 'all' && voucher.target_audience !== customerType) {
+      return res.status(403).json({ 
+        message: "Voucher này không dành cho loại khách hàng của bạn!" 
+      });
     }
 
     const existingVoucher = await VoucherUserModel.findOne({ user_id, voucher_id });
@@ -3381,31 +3761,11 @@ app.post("/api/voucher-user/save", verifyToken, async (req, res) => {
   }
 });
 
-app.get("/api/voucher-user/debug/:voucher_id", verifyToken, async (req, res) => {
-  try {
-    const { voucher_id } = req.params;
-    const user_id = req.user.userId;
 
-    const user = await UserModel.findById(user_id);
-    if (!user || user.role < 1) {
-      return res.status(403).json({ message: "Không có quyền truy cập" });
-    }
 
-    const voucherUser = await VoucherUserModel.findOne({ voucher_id, user_id });
-    
-    res.json({
-      voucher_id,
-      user_id,
-      exists: !!voucherUser,
-      used: voucherUser?.used || false,
-      created_at: voucherUser?.created_at,
-      updated_at: voucherUser?.updated_at
-    });
-  } catch (error) {
-            console.error("Lỗi gỡ lỗi voucher user:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi khi debug voucher user" });
-  }
-});
+
+
+
 
 app.get("/api/admin/search", async (req, res) => {
   const searchTerm = req.query.q?.toString().trim() || "";
@@ -3877,7 +4237,7 @@ app.post(
         sale_price: parseFloat(sale_price) || 0,
         status: status || "0",
         quantity: parseInt(quantity) || 0,
-        sex: sex || "",
+        sex: sex || null,
         case_diameter: case_diameter || "",
         style: style || "",
         features: features || "",
@@ -4587,7 +4947,7 @@ app.delete("/api/admin/user/delete/:id", verifyToken, async (req, res) => {
 
 app.get("/api/admin/order", async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
+  const limit = parseInt(req.query.limit) || 10000;
   const skip = (page - 1) * limit;
 
   const searchTerm = req.query.searchTerm || "";
@@ -4886,7 +5246,7 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
             );
           }
           
-          console.log(`Đã cập nhật lại tồn kho cho đơn hàng ${id}`);
+
         } catch (stockError) {
           console.error('Lỗi khi cập nhật tồn kho:', stockError);
         }
@@ -4940,7 +5300,7 @@ app.put("/api/admin/order/suaStatus/:id", async (req, res) => {
 
 app.get("/api/admin/news", async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
+  const limit = parseInt(req.query.limit) || 1000 ;
   const skip = (page - 1) * limit;
 
   const searchTerm = req.query.searchTerm || "";
@@ -5241,7 +5601,7 @@ app.delete("/api/admin/categoryNews/xoa/:id", async (req, res) => {
 
 app.get("/api/admin/voucher", async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
+  const limit = parseInt(req.query.limit) || 20;
   const skip = (page - 1) * limit;
 
   const searchTerm = req.query.searchTerm || "";
@@ -5321,6 +5681,7 @@ app.post("/api/admin/voucher/them", async (req, res) => {
     discount_value,
     minimum_order_value,
     max_discount,
+    target_audience,
   } = req.body;
 
   try {
@@ -5342,6 +5703,7 @@ app.post("/api/admin/voucher/them", async (req, res) => {
       discount_value,
       minimum_order_value: minimum_order_value || 0,
       max_discount: max_discount || 0,
+      target_audience: target_audience || 'all',
       created_at: new Date(),
       updated_at: new Date(),
     });
@@ -5382,6 +5744,7 @@ app.put("/api/admin/voucher/sua/:id", async (req, res) => {
     discount_value,
     minimum_order_value,
     max_discount,
+    target_audience,
   } = req.body;
 
   try {
@@ -5416,6 +5779,7 @@ app.put("/api/admin/voucher/sua/:id", async (req, res) => {
         discount_value,
         minimum_order_value: minimum_order_value || 0,
         max_discount: max_discount || 0,
+        target_audience: target_audience || 'all',
         updated_at: new Date(),
       },
       { new: true }
@@ -5463,7 +5827,7 @@ app.delete("/api/admin/voucher/xoa/:id", async (req, res) => {
 
 app.get("/api/admin/brand", async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
+  const limit = parseInt(req.query.limit) || 10000;
   const skip = (page - 1) * limit;
 
   const search = req.query.search || "";

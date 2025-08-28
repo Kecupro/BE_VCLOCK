@@ -40,7 +40,12 @@ let voucherSchema = new mongoose.Schema(
       default: null,
       min: 0,
     },
-
+    target_audience: {
+      type: String,
+      enum: ['all', 'new_customer', 'loyal_customer', 'vip_customer'],
+      default: 'all',
+      required: true,
+    },
     created_at: {
       type: Date,
       default: Date.now,

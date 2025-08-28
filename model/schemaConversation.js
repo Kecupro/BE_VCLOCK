@@ -6,13 +6,19 @@ const ConversationSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
-  participants: [
-    {
-      userId: { type: String, required: true },
-      userName: { type: String, required: true },
-      userAvatar: { type: String, default: '' },
-    }
-  ],
+  participants:{
+    type: [
+      {
+        userId: String,
+        userName: String,
+        userAvatar: String,
+        role: { type: String, enum: ['user', 'admin', 'bot'], default: 'user' },
+        unreadCount: { type: Number, default: 0 }
+      }
+    ],
+    default: [] 
+  }
+  ,
   lastMessage: {
     type: String,
     default: '',
