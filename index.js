@@ -45,22 +45,35 @@ require('./auth/facebook');
 
 app.use(cors({
   origin: function (origin, callback) {
+    // Log để debug CORS
+    console.log('🔍 CORS Request - Origin:', origin);
 
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      console.log('✅ CORS: No origin - allowing');
+      return callback(null, true);
+    }
 
     const cleanOrigin = origin.replace(/\/$/, '');
+    console.log('🔍 CORS: Cleaned origin:', cleanOrigin);
 
     const allowedOrigins = process.env.CORS_ORIGIN 
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-  : [];
+      ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+      : [];
+    
+    console.log('🔍 CORS: Allowed origins from env:', allowedOrigins);
+    console.log('🔍 CORS: CORS_ORIGIN env value:', process.env.CORS_ORIGIN);
 
     const vercelPattern = /^https:\/\/fe-vclock.*\.vercel\.app$/;
+    const isVercel = vercelPattern.test(cleanOrigin);
+    console.log('🔍 CORS: Is Vercel origin:', isVercel);
     
-    if (allowedOrigins.includes(cleanOrigin) || vercelPattern.test(cleanOrigin)) {
+    if (allowedOrigins.includes(cleanOrigin) || isVercel) {
+      console.log('✅ CORS: Origin allowed:', cleanOrigin);
       callback(null, cleanOrigin);
     } else {
-  
-      callback(new Error('Not allowed by CORS'));
+      console.log('❌ CORS: Origin rejected:', cleanOrigin);
+      console.log('❌ CORS: Allowed origins:', allowedOrigins);
+      callback(new Error(`Not allowed by CORS: ${cleanOrigin}`));
     }
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
